@@ -75,8 +75,9 @@ Light, readable, candy-accented. Restyle in place:
 - **Brand mark** (`.brand-mark`): candy gradient tile.
 - **Topbar** (`.topbar`): light, ink title, candy status dot. Window controls +
   voice/companion buttons restyled to light candy.
-- **Messages** (`.message`): assistant bubbles `#ffe0ee`/`#8a2b5e` with a
-  tail radius; user bubbles candy gradient + white text, right-aligned.
+- **Messages** (`.message`): assistant replies are **plain text on the canvas**
+  (no bubble/box), color `#5a3350`, with a small uppercase pink `BOB` role label.
+  User messages keep the candy gradient pill + white text, right-aligned.
 - **Empty-state orb** (`.orb`): mini candy jelly face echoing the companion.
 - **Composer** (`.composer`): white card, `#ffd0e4` border, candy focus ring;
   round candy-gradient send button.

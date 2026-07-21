@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from motionkey.bindings import BindingStore, load, save
 from motionkey.gesture_engine import Debouncer, GestureEngine, derive_active
-from motionkey.models import HandObs
+from motionkey.models import HandObs, HeadObs
 from motionkey.hand_detector import classify_fist
 
 
@@ -114,9 +114,9 @@ def test_tracking_loss_releases_key():
 
 # ---- derive gesture activity from hands (incl. raised hands) ----
 
-def _hand(handed, is_fist, wrist_y):
-    lm = [(0.5, 1.0)] * 21
-    lm[0] = (0.5, wrist_y)
+def _hand(handed, is_fist, wrist_y, wrist_x=0.5):
+    lm = [(wrist_x, 1.0)] * 21
+    lm[0] = (wrist_x, wrist_y)
     return HandObs(handedness=handed, is_fist=is_fist, confidence=1.0, landmarks=lm)
 
 
@@ -133,6 +133,40 @@ def test_derive_active():
     c = derive_active([_hand("left", True, 0.9), _hand("right", True, 0.9)])
     assert c["both-fists"]
     assert not c["left-fist"] and not c["right-fist"]
+
+
+def test_derive_both_hands_raised():
+    # both open + high -> both-hands-raised, singles suppressed
+    a = derive_active([_hand("left", False, 0.2), _hand("right", False, 0.2)])
+    assert a["both-hands-raised"]
+    assert not a["raise-left-hand"] and not a["raise-right-hand"]
+
+
+def test_derive_clap():
+    # two open hands with wrists close -> clap
+    near = derive_active([_hand("left", False, 0.9, 0.48),
+                          _hand("right", False, 0.9, 0.52)])
+    assert near["clap"]
+    # far apart -> no clap
+    far = derive_active([_hand("left", False, 0.9, 0.1),
+                         _hand("right", False, 0.9, 0.9)])
+    assert not far["clap"]
+    # a fist is never part of a clap
+    fist = derive_active([_hand("left", True, 0.9, 0.5),
+                          _hand("right", False, 0.9, 0.5)])
+    assert not fist["clap"]
+
+
+def test_derive_head_lean():
+    left = derive_active([], head=HeadObs(roll_deg=-20.0))
+    assert left["head-lean-left"] and not left["head-lean-right"]
+    right = derive_active([], head=HeadObs(roll_deg=20.0))
+    assert right["head-lean-right"] and not right["head-lean-left"]
+    # upright / no face -> neither
+    up = derive_active([], head=HeadObs(roll_deg=0.0))
+    assert not up["head-lean-left"] and not up["head-lean-right"]
+    none = derive_active([], head=None)
+    assert not none["head-lean-left"] and not none["head-lean-right"]
 
 
 # ---- binding validation ----

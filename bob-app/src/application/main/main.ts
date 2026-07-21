@@ -8,8 +8,10 @@ import { CodexAppServerClient } from "../../codex/app-server-client.js";
 import { CodexCapability } from "../../codex/capability.js";
 import { DelegationWorkspace } from "../../codex/delegation-workspace.js";
 import type { CodexCommand, CodexCommandValue } from "../../contracts/codex.js";
+import type { MotionKeyCommand, MotionKeyGestureMode, MotionKeyResult } from "../../contracts/motionkey.js";
 import { IPC, type IpcResult, type WindowMode } from "../../contracts/ipc.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
+import { MotionKeyController, resolveMotionKeyPaths } from "./motionkey-controller.js";
 import { mintRealtimeClientSecret } from "./realtime-secret.js";
 import { SessionStore } from "./session-store.js";
 import { SherpaWakeEngine } from "./sherpa-wake-engine.js";
@@ -21,6 +23,7 @@ config({ path: path.join(app.getAppPath(), ".env.local"), processEnv: localEnvir
 let mainWindow: BrowserWindow | undefined;
 let sessions: SessionStore;
 let codex: CodexCapability;
+let motionKey: MotionKeyController;
 let windowMode: WindowMode = "companion";
 const wakeEngine = new SherpaWakeEngine(app.getAppPath());
 
@@ -40,6 +43,7 @@ else {
   app.whenReady().then(() => {
     sessions = new SessionStore(path.join(app.getPath("userData"), "sessions.json"));
     codex = createCodexCapability();
+    motionKey = createMotionKeyController();
     registerIpc();
     configureMediaPermissions();
     createWindow();
@@ -53,6 +57,7 @@ app.on("activate", () => {
 app.on("window-all-closed", () => app.quit());
 app.on("will-quit", () => {
   codex?.dispose();
+  motionKey?.dispose();
   wakeEngine.dispose();
 });
 
@@ -150,6 +155,14 @@ function registerIpc() {
   ipcMain.handle(IPC.controlCodex, async (_event, command: unknown): Promise<IpcResult<CodexCommandValue>> => protect(() => (
     codex.execute(requiredCodexCommand(command))
   )));
+  ipcMain.handle(IPC.controlMotionKey, async (_event, command: unknown): Promise<IpcResult<MotionKeyResult>> => protect(() => (
+    motionKey.execute(requiredMotionKeyCommand(command))
+  )));
+}
+
+function createMotionKeyController() {
+  const { projectDir, python } = resolveMotionKeyPaths(app.getAppPath(), localEnvironment);
+  return new MotionKeyController(projectDir, python);
 }
 
 function createCodexCapability() {
@@ -341,6 +354,52 @@ function optionalShortText(value: unknown, field: string, maximumLength: number)
   if (value === undefined) return undefined;
   if (typeof value !== "string" || value.length > maximumLength) throw new Error(`The Codex ${field} is invalid.`);
   return value.trim() || undefined;
+}
+
+function requiredMotionKeyCommand(value: unknown): MotionKeyCommand {
+  if (!value || typeof value !== "object") throw new Error("The MotionKey command is invalid.");
+  const command = value as Record<string, unknown>;
+  switch (command.type) {
+    case "bind":
+      return {
+        type: "bind",
+        gesture: motionKeyToken(command.gesture, "gesture"),
+        key: motionKeyToken(command.key, "key"),
+        mode: motionKeyMode(command.mode),
+      };
+    case "unbind":
+      return { type: "unbind", gesture: motionKeyToken(command.gesture, "gesture") };
+    case "listBindings":
+      return { type: "listBindings" };
+    case "listGestures":
+      return { type: "listGestures" };
+    case "start":
+      return { type: "start", dryRun: motionKeyFlag(command.dryRun), preview: motionKeyFlag(command.preview) };
+    case "stop":
+      return { type: "stop" };
+    case "status":
+      return { type: "status" };
+    default:
+      throw new Error("The MotionKey command is invalid.");
+  }
+}
+
+function motionKeyToken(value: unknown, field: string) {
+  if (typeof value !== "string" || !value.trim() || value.length > 64 || !/^[A-Za-z0-9_-]+$/.test(value.trim())) {
+    throw new Error(`The MotionKey ${field} is invalid.`);
+  }
+  return value.trim();
+}
+
+function motionKeyMode(value: unknown): MotionKeyGestureMode {
+  if (value !== "hold" && value !== "tap") throw new Error("The MotionKey mode is invalid.");
+  return value;
+}
+
+function motionKeyFlag(value: unknown) {
+  if (value === undefined) return false;
+  if (typeof value !== "boolean") throw new Error("The MotionKey flag is invalid.");
+  return value;
 }
 
 function errorMessage(error: unknown) {

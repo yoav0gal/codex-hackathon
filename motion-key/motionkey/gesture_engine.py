@@ -6,6 +6,7 @@ loop feeds it `active` (gesture -> raw bool this frame) plus a timestamp.
 from __future__ import annotations
 
 import logging
+import math
 
 from .bindings import BindingStore
 
@@ -94,27 +95,48 @@ class GestureEngine:
 # A hand counts as "raised" when it is open and held in the upper part of the
 # frame (normalized wrist y below this line; y=0 is the top).
 RAISE_Y = 0.4
+# Two open hands whose wrists are within this normalized distance count as a clap.
+CLAP_DIST = 0.15
+# Head must tilt at least this many degrees (eye line off horizontal) to lean.
+# ponytail: fixed threshold; expose as a flag if it needs per-user tuning.
+HEAD_LEAN_DEG = 12.0
 
 
-def derive_active(hands, raise_y: float = RAISE_Y) -> dict[str, bool]:
-    """Map detected hands -> raw gesture activity for one frame."""
+def derive_active(hands, head=None, raise_y: float = RAISE_Y) -> dict[str, bool]:
+    """Map detected hands (and optional head pose) -> raw gesture activity."""
     left_fist = right_fist = left_raise = right_raise = False
+    left_wrist = right_wrist = None
     for h in hands:
-        wrist_y = h.landmarks[0][1] if h.landmarks else 1.0
-        raised = (not h.is_fist) and wrist_y < raise_y
+        wrist = h.landmarks[0] if h.landmarks else (0.5, 1.0)
+        raised = (not h.is_fist) and wrist[1] < raise_y
         if h.handedness == "left":
             left_fist |= h.is_fist
             left_raise |= raised
+            left_wrist = wrist
         else:
             right_fist |= h.is_fist
             right_raise |= raised
+            right_wrist = wrist
     both = left_fist and right_fist
+    both_raise = left_raise and right_raise
+    clap = (
+        left_wrist is not None and right_wrist is not None
+        and not left_fist and not right_fist
+        and math.hypot(left_wrist[0] - right_wrist[0],
+                       left_wrist[1] - right_wrist[1]) < CLAP_DIST
+    )
+    roll = head.roll_deg if head is not None else 0.0
     return {
         # both-fists is exclusive: when both hands are closed only it fires,
         # not the individual left/right fists (avoids 3 keys at once).
         "left-fist": left_fist and not both,
         "right-fist": right_fist and not both,
         "both-fists": both,
-        "raise-left-hand": left_raise,
-        "raise-right-hand": right_raise,
+        # both-hands-raised is exclusive over the single raises, same as fists.
+        "raise-left-hand": left_raise and not both_raise,
+        "raise-right-hand": right_raise and not both_raise,
+        "both-hands-raised": both_raise,
+        "clap": clap,
+        "head-lean-left": head is not None and roll <= -HEAD_LEAN_DEG,
+        "head-lean-right": head is not None and roll >= HEAD_LEAN_DEG,
     }

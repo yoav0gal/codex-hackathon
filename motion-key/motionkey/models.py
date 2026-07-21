@@ -9,6 +9,10 @@ GESTURES = (
     "both-fists",
     "raise-left-hand",
     "raise-right-hand",
+    "both-hands-raised",
+    "clap",
+    "head-lean-left",
+    "head-lean-right",
 )
 MODES = ("hold", "tap")
 
@@ -34,3 +38,10 @@ class HandObs:
     is_fist: bool
     confidence: float        # 0..1
     landmarks: list          # list[(x, y)] normalized, for preview
+
+
+@dataclass
+class HeadObs:
+    """Head pose for a single frame. roll_deg from the eye line: negative =
+    tilted toward the user's left, positive = toward the right."""
+    roll_deg: float

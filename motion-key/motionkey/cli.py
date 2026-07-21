@@ -78,6 +78,12 @@ def _run(args) -> int:
         return 3
 
     detector = HandDetector()
+    # Only spin up face detection (and its model download) when a head gesture
+    # is actually bound.
+    face = None
+    if any(g.startswith("head-lean") for g, _ in store.enabled_items()):
+        from .face_detector import FaceDetector
+        face = FaceDetector()
     mode = "DRY-RUN (no keys sent)" if args.dry_run else "LIVE"
     print(f"MotionKey running [{mode}]. Ctrl+C or q to stop.")
     if not args.dry_run:
@@ -89,7 +95,8 @@ def _run(args) -> int:
             if rgb is None:
                 continue
             hands = detector.detect(rgb)
-            engine.update(derive_active(hands), time.time())
+            head = face.detect(rgb) if face else None
+            engine.update(derive_active(hands, head), time.time())
             if args.preview:
                 if not camera.show(bgr, hands, engine.stable):
                     break
@@ -100,6 +107,8 @@ def _run(args) -> int:
     finally:
         engine.release_all()   # guarantee: never leave a key stuck down
         detector.close()
+        if face:
+            face.close()
         camera.release()
     return 0
 

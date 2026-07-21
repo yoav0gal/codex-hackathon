@@ -1,5 +1,6 @@
 import type { ChatSession, NewMessageInput, SessionSummary } from "./sessions.js";
 import type { CodexCommand, CodexCommandValue, CodexTaskUpdate } from "./codex.js";
+import type { MotionKeyCommand, MotionKeyResult } from "./motionkey.js";
 
 export const IPC = {
   getRealtimeClientSecret: "realtime:get-client-secret",
@@ -17,6 +18,7 @@ export const IPC = {
   stopWakeEngine: "wake:stop",
   controlCodex: "codex:control",
   codexTaskUpdate: "codex:task-update",
+  controlMotionKey: "motionkey:control",
 } as const;
 
 export type WindowMode = "companion" | "full";
@@ -41,6 +43,7 @@ export interface DesktopBridge {
   stopWakeEngine(): Promise<void>;
   controlCodex(command: CodexCommand): Promise<CodexCommandValue>;
   onCodexTaskUpdate(listener: (update: CodexTaskUpdate) => void): () => void;
+  controlMotionKey(command: MotionKeyCommand): Promise<MotionKeyResult>;
 }
 
 export type IpcResult<T> =
