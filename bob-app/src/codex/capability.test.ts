@@ -142,4 +142,51 @@ describe("Codex capability", () => {
     })).rejects.toThrow("Resolve that request there");
     expect(client.steerTurn).not.toHaveBeenCalled();
   });
+
+  it("enables Codex Live for one resolved Task and tags only its updates", async () => {
+    const { capability, client, emit } = setup();
+    const updates: CodexTaskUpdate[] = [];
+    capability.onTaskUpdate((update) => updates.push(update));
+
+    await expect(capability.execute({
+      type: "live",
+      enabled: true,
+      thread: "Fix login",
+    })).resolves.toMatchObject({
+      codexLive: true,
+      threadId: "thread-123",
+      connectionMode: "shared",
+    });
+    expect(client.resumeThread).toHaveBeenCalledWith("thread-123");
+
+    emit({
+      threadId: "thread-123",
+      turnId: "turn-live",
+      status: "inProgress",
+      assistantText: "Running tests",
+      event: "agentMessage",
+      updateText: "Running tests",
+    });
+    emit({
+      threadId: "thread-other",
+      turnId: "turn-other",
+      status: "completed",
+      assistantText: "Done",
+      event: "turnCompleted",
+    });
+
+    expect(updates[0]).toMatchObject({ threadId: "thread-123", live: true });
+    expect(updates[1]?.live).toBeUndefined();
+  });
+
+  it("turns Codex Live off without resolving or resuming a Task", async () => {
+    const { capability, client } = setup();
+
+    await expect(capability.execute({ type: "live", enabled: false })).resolves.toEqual({
+      message: "Codex Live is off.",
+      codexLive: false,
+    });
+    expect(client.listThreads).not.toHaveBeenCalled();
+    expect(client.resumeThread).not.toHaveBeenCalled();
+  });
 });

@@ -22,9 +22,14 @@ The repository currently contains a working Realtime foundation:
   continuing, monitoring, interrupting, searching, opening, and checking Tasks
 - a Google Chrome tool for opening, navigating, and managing browser tabs
 - live completion and attention notifications from Codex back into Bob
+- Codex Live, which marks one Task and reads its completed progress messages
+  and important state changes aloud while the Realtime Session is connected
 
 Starting, continuing, and monitoring a Codex Task leaves Codex Desktop in the
 background. Bob opens or foregrounds Codex only when the user explicitly asks.
+Ask Bob to “turn on Codex Live for &lt;task&gt;” to select one Task, switch it by
+naming another Task, or ask him to turn Codex Live off. Streaming token deltas
+are coalesced at completed message boundaries so each update is spoken once.
 
 When Bob first controls Google Chrome, macOS may ask for permission to let Bob
 automate it. The tool supports opening Chrome, opening or navigating tabs,

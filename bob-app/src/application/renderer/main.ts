@@ -8,6 +8,7 @@ if (!root) throw new Error("The application root is missing.");
 
 const agent = new OpenAIRealtimeAgent({
   getClientSecret: () => window.realtimeApp.getRealtimeClientSecret(),
+  captureScreenshot: () => window.realtimeApp.captureScreenshot(),
   executeTool: (name, arguments_) => {
     if (name === "control_motionkey") return executeMotionKeyTool(name, arguments_, window.realtimeApp);
     if (name === "control_chrome") return executeChromeTool(name, arguments_, window.realtimeApp);

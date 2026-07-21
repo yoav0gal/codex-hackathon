@@ -21,24 +21,38 @@ export interface CodexCapabilityOptions {
 /** Intent-level interface used by Electron IPC and Realtime tools. */
 export class CodexCapability {
   private activeThreadId: string | undefined;
+  private liveThreadId: string | undefined;
+  private readonly taskUpdateListeners = new Set<(update: CodexTaskUpdate) => void>();
 
   constructor(
     private readonly client: CodexAppServerClient,
     private readonly options: CodexCapabilityOptions,
   ) {
     this.client.onUpdate((update) => {
-      this.activeThreadId = update.threadId;
+      const outgoing = {
+        ...update,
+        ...(update.threadId === this.liveThreadId ? { live: true } : {}),
+      };
+      for (const listener of this.taskUpdateListeners) {
+        try {
+          listener(outgoing);
+        } catch {
+          // A renderer observer must not break the app-server event stream.
+        }
+      }
     });
   }
 
   onTaskUpdate(listener: (update: CodexTaskUpdate) => void) {
-    return this.client.onUpdate(listener);
+    this.taskUpdateListeners.add(listener);
+    return () => this.taskUpdateListeners.delete(listener);
   }
 
   async execute(command: CodexCommand): Promise<CodexCommandValue> {
     if (command.type === "start") return this.start(command.task, command.workspace, command.effort);
     if (command.type === "continue") return this.continue(command.instruction, command.thread, command.effort);
     if (command.type === "monitor") return this.monitor(command.thread);
+    if (command.type === "live") return this.setLive(command.enabled, command.thread);
     if (command.type === "interrupt") return this.interrupt(command.thread);
     if (command.type === "open") return this.open(command.target, command.reference);
     if (command.type === "search") return this.search(command.scope, command.query);
@@ -108,6 +122,36 @@ export class CodexCapability {
       connectionMode: connection.mode,
       ...(connection.serverVersion ? { serverVersion: connection.serverVersion } : {}),
       ...(task ? { task } : {}),
+    } satisfies CodexCommandValue;
+  }
+
+  private async setLive(enabled: boolean, reference: string | undefined) {
+    if (!enabled) {
+      this.liveThreadId = undefined;
+      return {
+        message: "Codex Live is off.",
+        codexLive: false,
+      } satisfies CodexCommandValue;
+    }
+
+    const thread = await this.resolveThread(reference);
+    const connection = await this.client.connect();
+    const previous = this.liveThreadId;
+    this.liveThreadId = thread.id;
+    try {
+      await this.client.resumeThread(thread.id);
+    } catch (error) {
+      this.liveThreadId = previous;
+      throw error;
+    }
+    this.activeThreadId = thread.id;
+    return {
+      message: `Codex Live is on for “${thread.title}”. Bob will read its progress updates aloud while the Realtime Session is connected.`,
+      threadId: thread.id,
+      workspace: thread.workspace,
+      connectionMode: connection.mode,
+      ...(connection.serverVersion ? { serverVersion: connection.serverVersion } : {}),
+      codexLive: true,
     } satisfies CodexCommandValue;
   }
 

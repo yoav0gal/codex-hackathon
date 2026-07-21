@@ -41,6 +41,18 @@ export const BOB_CODEX_TOOLS = [
   },
   {
     type: "function",
+    name: "set_codex_live",
+    description: "Turn Codex Live on for one existing Codex Task, switch it to another Task, or turn it off. While on, Bob automatically reads that Task's completed progress messages and important state changes aloud.",
+    parameters: {
+      type: "object",
+      properties: {
+        thread: { type: "string", description: "Optional task title, distinctive phrase, or ID. Omit to use Bob's active task." },
+        enabled: { type: "boolean", description: "Set false to turn Codex Live off. Defaults to true." },
+      },
+    },
+  },
+  {
+    type: "function",
     name: "interrupt_codex_task",
     description: "Interrupt the active turn in a Codex Task without approving any pending action.",
     parameters: {

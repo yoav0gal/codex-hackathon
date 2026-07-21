@@ -66,4 +66,20 @@ describe("Bob Codex tool routing", () => {
       query: "hackathon",
     });
   });
+
+  it("turns Codex Live on for a Task or off globally", () => {
+    expect(codexCommand("set_codex_live", {
+      thread: "Fix login",
+    })).toEqual({
+      type: "live",
+      enabled: true,
+      thread: "Fix login",
+    });
+    expect(codexCommand("set_codex_live", {
+      enabled: false,
+    })).toEqual({
+      type: "live",
+      enabled: false,
+    });
+  });
 });

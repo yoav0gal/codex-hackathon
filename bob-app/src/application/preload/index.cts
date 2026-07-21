@@ -3,6 +3,7 @@ import type { DesktopBridge, IpcResult, RealtimeClientSecret, WindowMode } from 
 import type { CodexCommand, CodexCommandValue, CodexTaskUpdate } from "../../contracts/codex.js";
 import type { MotionKeyCommand, MotionKeyResult } from "../../contracts/motionkey.js";
 import type { ChromeCommand, ChromeResult } from "../../contracts/chrome.js";
+import type { ScreenshotCapture } from "../../contracts/screenshots.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
 
 const channels: Record<keyof DesktopBridge, string> = {
@@ -23,6 +24,7 @@ const channels: Record<keyof DesktopBridge, string> = {
   onCodexTaskUpdate: "codex:task-update",
   controlMotionKey: "motionkey:control",
   controlChrome: "chrome:control",
+  captureScreenshot: "screen:capture",
 };
 
 const bridge: DesktopBridge = {
@@ -44,6 +46,7 @@ const bridge: DesktopBridge = {
   controlCodex: (command: CodexCommand) => invoke<CodexCommandValue>(channels.controlCodex, command),
   controlMotionKey: (command: MotionKeyCommand) => invoke<MotionKeyResult>(channels.controlMotionKey, command),
   controlChrome: (command: ChromeCommand) => invoke<ChromeResult>(channels.controlChrome, command),
+  captureScreenshot: () => invoke<ScreenshotCapture>(channels.captureScreenshot),
   onCodexTaskUpdate: (listener) => {
     const receive = (_event: Electron.IpcRendererEvent, value: unknown) => {
       if (isCodexTaskUpdate(value)) listener(value);
@@ -68,6 +71,10 @@ function isCodexTaskUpdate(value: unknown): value is CodexTaskUpdate {
     && typeof update.turnId === "string"
     && ["inProgress", "needsAttention", "completed", "failed", "interrupted"].includes(update.status ?? "")
     && typeof update.assistantText === "string"
+    && (update.event === undefined || ["snapshot", "turnStarted", "agentMessage", "delta", "attention", "attentionResolved", "error", "turnCompleted"].includes(update.event))
+    && (update.eventId === undefined || typeof update.eventId === "string")
+    && (update.updateText === undefined || typeof update.updateText === "string")
+    && (update.live === undefined || typeof update.live === "boolean")
     && (update.error === undefined || typeof update.error === "string")
     && (update.attention === undefined || (
       typeof update.attention === "object"

@@ -37,6 +37,14 @@ export function codexCommand(name: string, arguments_: Record<string, unknown>):
   if (name === "monitor_codex_task") {
     return { type: "monitor", thread: requiredString(arguments_, "thread") };
   }
+  if (name === "set_codex_live") {
+    const thread = optionalString(arguments_, "thread");
+    return {
+      type: "live",
+      enabled: optionalBoolean(arguments_, "enabled") ?? true,
+      ...(thread ? { thread } : {}),
+    };
+  }
   if (name === "interrupt_codex_task" || name === "get_codex_task_status") {
     const type = name === "interrupt_codex_task" ? "interrupt" : "status";
     const thread = optionalString(arguments_, "thread");
@@ -97,4 +105,11 @@ function stringValue(arguments_: Record<string, unknown>, name: string) {
   const value = arguments_[name];
   if (typeof value !== "string") throw new Error(`The Codex tool is missing ${name}.`);
   return value.trim();
+}
+
+function optionalBoolean(arguments_: Record<string, unknown>, name: string) {
+  const value = arguments_[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new Error(`The Codex tool has an invalid ${name}.`);
+  return value;
 }

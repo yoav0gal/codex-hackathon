@@ -30,7 +30,7 @@ flowchart LR
 | Electron main | `src/application/main/` | window lifecycle, media permission, secret minting, IPC handlers, and local storage |
 | Preload | `src/application/preload/` | narrow renderer-to-main bridge |
 | Contracts | `src/contracts/` | session and IPC values shared across processes |
-| Codex capability | `src/codex/` | shared daemon transport, task subscriptions, intent-level task control, updates, and approval observation |
+| Codex capability | `src/codex/` | shared daemon transport, task subscriptions, intent-level task control, Codex Live selection, updates, and approval observation |
 
 ### Useful existing seams
 
@@ -90,7 +90,7 @@ The application module coordinates the active Session, selected view, saved Sess
 ### Codex capability module
 
 `CodexCapability` exposes one intent-level command interface: start, continue,
-monitor, interrupt, open, search, and status. Its open/search operations cover
+monitor, set Codex Live, interrupt, open, search, and status. Its open/search operations cover
 both configured local projects and persisted Codex Tasks. `CodexAppServerClient` hides the
 managed-daemon lifecycle, proxy WebSocket framing, JSON-RPC, task discovery,
 subscriptions, reconnection, and event aggregation. The renderer never owns a
@@ -100,6 +100,12 @@ Bob polls `thread/loaded/list` on the shared daemon and resumes newly loaded
 Codex Tasks, which lets Desktop-originated turns become observable without
 manually copying every task ID. Explicit search and monitor commands cover
 persisted Tasks that are not currently loaded.
+
+Codex Live marks at most one Task. The capability tags events for that Task;
+the renderer narration policy speaks completed `agentMessage` items plus
+attention, error, and terminal changes. Raw message deltas remain transport
+state and are never turned into overlapping speech responses. Codex Live is a
+runtime setting and does not grant approval authority.
 
 Do not introduce a generalized plugin interface merely for the first Codex implementation. When a second capability demonstrates shared variation, extract the smallest common capability seam supported by both implementations.
 

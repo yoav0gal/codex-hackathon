@@ -31,3 +31,7 @@ _Avoid_: Plugin, tool, integration
 **Codex Task**:
 A persistent unit of development work owned and executed by Codex. Multiple Sessions may refer to the same Codex Task.
 _Avoid_: Session, Realtime conversation
+
+**Codex Live**:
+A runtime setting that marks one Codex Task for automatic spoken delivery of its completed progress messages and important state changes whenever the Realtime Session is connected. Selecting another Codex Task switches the setting; turning it off clears the selection.
+_Avoid_: All-task monitoring, token streaming, approval authority

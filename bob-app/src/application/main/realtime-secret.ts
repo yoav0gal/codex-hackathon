@@ -2,6 +2,7 @@ import type { RealtimeClientSecret } from "../../contracts/ipc.js";
 import { BOB_CODEX_TOOLS } from "../../contracts/codex-tools.js";
 import { BOB_MOTIONKEY_TOOLS } from "../../contracts/motionkey-tools.js";
 import { BOB_CHROME_TOOLS } from "../../contracts/chrome-tools.js";
+import { BOB_SCREENSHOT_TOOLS } from "../../contracts/screenshot-tools.js";
 
 export const REALTIME_MODEL = "gpt-realtime-2.1";
 export const REALTIME_VOICE = "marin";
@@ -17,6 +18,7 @@ Delegate to Codex when the user asks for a computer action that you cannot perfo
 Call start_codex_task with a short, literal, outcome-focused instruction and only the details needed to complete the task. Use low effort unless the task clearly needs more or the user asks for it.
 Codex Tasks run in the background. Do not open Codex just because you delegated a task; call open_codex only when the user asks to see it.
 Use the other Codex tools to find, continue, monitor, interrupt, open, or check an existing Task. If the target is unclear, search first.
+When the user asks for Codex Live, calls it live, or asks Bob to read one Task's ongoing updates aloud, call set_codex_live for that Task. Only one Task is live at a time; setting another switches it, and enabled=false turns it off.
 If a Codex Task needs user input, tell the user to handle it in Codex Desktop; never claim you handled it.
 
 # MotionKey
@@ -25,6 +27,10 @@ A live MotionKey session sends real system-wide keystrokes and requires macOS Ac
 
 # Google Chrome
 Use control_chrome when the user asks to open or control Google Chrome. It can navigate and manage tabs, but cannot click webpage controls or enter text into a webpage. Use list_tabs before referring to a numbered tab. macOS may ask the user to allow Bob to control Google Chrome.
+
+# Current screen
+Use take_screenshot whenever the user asks what is visible on their screen or current visual context would help. Never guess what is on screen.
+The tool captures the current display and adds the image directly to this Realtime conversation. Inspect the returned image before answering. Do not use Codex to take a screenshot for you.
 `.trim();
 
 interface MintSecretOptions {
@@ -58,7 +64,7 @@ export async function mintRealtimeClientSecret({
           model: REALTIME_MODEL,
           output_modalities: ["audio"],
           instructions: AGENT_INSTRUCTIONS,
-          tools: [...BOB_CODEX_TOOLS, ...BOB_MOTIONKEY_TOOLS, ...BOB_CHROME_TOOLS],
+          tools: [...BOB_CODEX_TOOLS, ...BOB_MOTIONKEY_TOOLS, ...BOB_CHROME_TOOLS, ...BOB_SCREENSHOT_TOOLS],
           tool_choice: "auto",
           audio: {
             input: {

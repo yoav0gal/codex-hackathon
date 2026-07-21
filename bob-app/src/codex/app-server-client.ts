@@ -108,7 +108,7 @@ export class CodexAppServerClient {
       ...BOB_THREAD_EXECUTION_POLICY,
       serviceName: "bob",
       config: { model_reasoning_effort: effort },
-      developerInstructions: "Work autonomously with full local access and explain genuine blockers. Do not pause for approval. When visual verification is relevant, use screenshot capability and send the screenshots to the live model as part of the workflow. Required user input must remain visible in Codex Desktop; Bob only observes and reports it.",
+      developerInstructions: "Work autonomously with full local access and explain genuine blockers. Do not pause for approval. Required user input must remain visible in Codex Desktop; Bob only observes and reports it.",
     }));
     const thread = asObject(response.thread);
     const threadId = requiredString(thread.id, "Codex did not return a task ID.");
@@ -140,7 +140,14 @@ export class CodexAppServerClient {
     const turn = asObject(response.turn);
     const turnId = requiredString(turn.id, "Codex did not return a turn ID.");
     if (!this.updates.has(turnId)) {
-      this.publish({ threadId, turnId, status: "inProgress", assistantText: "" });
+      this.publish({
+        threadId,
+        turnId,
+        status: "inProgress",
+        assistantText: "",
+        event: "turnStarted",
+        eventId: turnId,
+      });
     }
     return turnId;
   }
@@ -386,6 +393,8 @@ export class CodexAppServerClient {
       turnId,
       status: "needsAttention",
       assistantText: current?.assistantText ?? this.assistantText(turnId),
+      event: "attention",
+      eventId: requestKey(requestId),
       ...(current?.error ? { error: current.error } : {}),
       attention: { method, requestId },
     });
@@ -418,6 +427,8 @@ export class CodexAppServerClient {
       turnId,
       status: current?.status ?? "inProgress",
       assistantText: this.assistantText(turnId),
+      event: "delta",
+      eventId: itemId,
       ...(current?.error ? { error: current.error } : {}),
       ...(current?.attention ? { attention: current.attention } : {}),
     });
@@ -438,6 +449,9 @@ export class CodexAppServerClient {
       turnId,
       status: current?.status ?? "inProgress",
       assistantText: this.assistantText(turnId),
+      event: "agentMessage",
+      eventId: itemId,
+      updateText: text,
       ...(current?.error ? { error: current.error } : {}),
       ...(current?.attention ? { attention: current.attention } : {}),
     });
@@ -448,7 +462,14 @@ export class CodexAppServerClient {
     const turnId = optionalString(maybeObject(payload.turn)?.id);
     if (!threadId || !turnId) return;
     this.subscriptions.add(threadId);
-    this.publish({ threadId, turnId, status: "inProgress", assistantText: this.assistantText(turnId) });
+    this.publish({
+      threadId,
+      turnId,
+      status: "inProgress",
+      assistantText: this.assistantText(turnId),
+      event: "turnStarted",
+      eventId: turnId,
+    });
   }
 
   private receiveTurnCompleted(payload: JsonObject) {
@@ -469,6 +490,8 @@ export class CodexAppServerClient {
       turnId,
       status,
       assistantText: this.assistantText(turnId),
+      event: "turnCompleted",
+      eventId: turnId,
       ...(error ? { error } : {}),
     });
   }
@@ -484,6 +507,8 @@ export class CodexAppServerClient {
       turnId,
       status: current?.status ?? "inProgress",
       assistantText: current?.assistantText ?? this.assistantText(turnId),
+      event: "error",
+      eventId: turnId,
       error,
       ...(current?.attention ? { attention: current.attention } : {}),
     });
@@ -503,6 +528,8 @@ export class CodexAppServerClient {
       turnId: attention.turnId,
       status: remaining ? "needsAttention" : "inProgress",
       assistantText: current.assistantText,
+      event: "attentionResolved",
+      eventId: requestKey(requestId),
       ...(current.error ? { error: current.error } : {}),
       ...(remaining ? { attention: { method: remaining.method, requestId: remaining.requestId } } : {}),
     });
@@ -521,6 +548,8 @@ export class CodexAppServerClient {
         turnId,
         status,
         assistantText: this.assistantText(turnId),
+        event: "snapshot",
+        eventId: turnId,
         ...(optionalString(maybeObject(turn?.error)?.message) ? { error: optionalString(maybeObject(turn?.error)?.message) } : {}),
       });
     } else if (status === "inProgress") {
@@ -529,6 +558,8 @@ export class CodexAppServerClient {
         turnId,
         status: "inProgress",
         assistantText: this.assistantText(turnId),
+        event: "snapshot",
+        eventId: turnId,
       });
     }
   }
