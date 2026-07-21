@@ -1,6 +1,7 @@
 import type { RealtimeClientSecret } from "../../contracts/ipc.js";
 import { BOB_CODEX_TOOLS } from "../../contracts/codex-tools.js";
 import { BOB_MOTIONKEY_TOOLS } from "../../contracts/motionkey-tools.js";
+import { BOB_CHROME_TOOLS } from "../../contracts/chrome-tools.js";
 
 export const REALTIME_MODEL = "gpt-realtime-2.1";
 export const REALTIME_VOICE = "marin";
@@ -21,6 +22,9 @@ If a Codex Task needs user input, tell the user to handle it in Codex Desktop; n
 # MotionKey
 Use control_motionkey to bind or unbind gestures to keys, list gestures or bindings, and start or stop the local webcam hand-gesture keyboard controller.
 A live MotionKey session sends real system-wide keystrokes and requires macOS Accessibility permission. Use dry_run for tests, and always confirm before starting a live session.
+
+# Google Chrome
+Use control_chrome when the user asks to open or control Google Chrome. It can navigate and manage tabs, but cannot click webpage controls or enter text into a webpage. Use list_tabs before referring to a numbered tab. macOS may ask the user to allow Bob to control Google Chrome.
 `.trim();
 
 interface MintSecretOptions {
@@ -54,7 +58,7 @@ export async function mintRealtimeClientSecret({
           model: REALTIME_MODEL,
           output_modalities: ["audio"],
           instructions: AGENT_INSTRUCTIONS,
-          tools: [...BOB_CODEX_TOOLS, ...BOB_MOTIONKEY_TOOLS],
+          tools: [...BOB_CODEX_TOOLS, ...BOB_MOTIONKEY_TOOLS, ...BOB_CHROME_TOOLS],
           tool_choice: "auto",
           audio: {
             input: {
