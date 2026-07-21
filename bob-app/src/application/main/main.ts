@@ -351,7 +351,7 @@ function requiredSearchScope(value: unknown) {
 }
 
 function requiredEffort(value: unknown) {
-  if (value === undefined) return "high";
+  if (value === undefined) return "low";
   if (value !== "low" && value !== "medium" && value !== "high" && value !== "xhigh") {
     throw new Error("The Codex reasoning effort is invalid.");
   }

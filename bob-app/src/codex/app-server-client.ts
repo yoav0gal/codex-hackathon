@@ -108,7 +108,7 @@ export class CodexAppServerClient {
       ...BOB_THREAD_EXECUTION_POLICY,
       serviceName: "bob",
       config: { model_reasoning_effort: effort },
-      developerInstructions: "Work autonomously with full local access and explain genuine blockers. Do not pause for approval. Required user input must remain visible in Codex Desktop; Bob only observes and reports it.",
+      developerInstructions: "Work autonomously with full local access and explain genuine blockers. Do not pause for approval. When visual verification is relevant, use screenshot capability and send the screenshots to the live model as part of the workflow. Required user input must remain visible in Codex Desktop; Bob only observes and reports it.",
     }));
     const thread = asObject(response.thread);
     const threadId = requiredString(thread.id, "Codex did not return a task ID.");
