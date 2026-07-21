@@ -1,18 +1,20 @@
-import { stat, realpath } from "node:fs/promises";
 import path from "node:path";
 import type {
   CodexCommand,
   CodexCommandValue,
   CodexEffort,
+  CodexOpenTarget,
+  CodexSearchScope,
   CodexTaskUpdate,
   CodexThreadSummary,
 } from "../contracts/codex.js";
 import { CodexAppServerClient, isTerminalCodexStatus } from "./app-server-client.js";
 import type { DelegationWorkspace } from "./delegation-workspace.js";
+import type { WorkspaceResolver } from "./workspace-resolver.js";
 
 export interface CodexCapabilityOptions {
   delegations: DelegationWorkspace;
-  workspaceRoots: string[];
+  workspaces: WorkspaceResolver;
   openExternal(url: string): Promise<void>;
 }
 
@@ -38,8 +40,8 @@ export class CodexCapability {
     if (command.type === "continue") return this.continue(command.instruction, command.thread, command.effort);
     if (command.type === "monitor") return this.monitor(command.thread);
     if (command.type === "interrupt") return this.interrupt(command.thread);
-    if (command.type === "open") return this.open(command.thread);
-    if (command.type === "search") return this.search(command.query);
+    if (command.type === "open") return this.open(command.target, command.reference);
+    if (command.type === "search") return this.search(command.scope, command.query);
     return this.status(command.thread);
   }
 
@@ -59,9 +61,8 @@ export class CodexCapability {
     const threadId = await this.client.startThread(workspace, effort);
     this.activeThreadId = threadId;
     const turnId = await this.client.startTurn(threadId, task, effort);
-    await this.options.openExternal(threadUrl(threadId));
     return {
-      message: "Started the Codex Task and opened the same live task in Codex Desktop. Bob will report completion or anything requiring attention.",
+      message: "Started the Codex Task in the background. Bob will report completion or anything requiring attention.",
       threadId,
       turnId,
       workspace,
@@ -75,7 +76,6 @@ export class CodexCapability {
     const connection = await this.client.connect();
     await this.client.resumeThread(thread.id);
     this.activeThreadId = thread.id;
-    await this.options.openExternal(threadUrl(thread.id));
     const current = this.client.getLatestUpdate(thread.id);
     if (current?.status === "needsAttention") {
       throw new Error("This Codex Task is waiting for attention in Codex Desktop. Resolve that request there before continuing it.");
@@ -85,8 +85,8 @@ export class CodexCapability {
       : await this.client.startTurn(thread.id, instruction, effort);
     return {
       message: current?.status === "inProgress"
-        ? "Steered the active Codex turn. Bob remains subscribed to its live updates."
-        : "Continued the Codex Task in a new turn. Bob remains subscribed to its live updates.",
+        ? "Steered the active Codex turn in the background. Bob remains subscribed to its live updates."
+        : "Continued the Codex Task in a new background turn. Bob remains subscribed to its live updates.",
       threadId: thread.id,
       turnId,
       workspace: thread.workspace,
@@ -129,12 +129,29 @@ export class CodexCapability {
     } satisfies CodexCommandValue;
   }
 
-  private async open(reference: string | undefined) {
-    if (!reference && !this.activeThreadId) {
+  private async open(target: CodexOpenTarget, reference: string | undefined) {
+    if (target === "app") {
+      const url = this.activeThreadId
+        ? threadUrl(this.activeThreadId)
+        : projectUrl(await this.options.delegations.ensure());
+      await this.options.openExternal(url);
+      return { message: "Opened the current Codex view in Codex Desktop." } satisfies CodexCommandValue;
+    }
+    if (target === "delegations") {
       const workspace = await this.options.delegations.ensure();
-      await this.options.openExternal(`codex://threads/new?${new URLSearchParams({ path: workspace })}`);
+      await this.options.openExternal(projectUrl(workspace));
       return { message: "Opened the Bob Delegations project in Codex Desktop.", workspace } satisfies CodexCommandValue;
     }
+    if (target === "project") {
+      if (!reference?.trim()) throw new Error("Tell Bob which code project to open.");
+      const workspace = await this.options.workspaces.resolve(reference);
+      await this.options.openExternal(projectUrl(workspace));
+      return {
+        message: `Opened the ${path.basename(workspace)} project in Codex Desktop.`,
+        workspace,
+      } satisfies CodexCommandValue;
+    }
+    if (!reference?.trim()) throw new Error("Tell Bob which Codex Task to open.");
     const thread = await this.resolveThread(reference);
     this.activeThreadId = thread.id;
     await this.options.openExternal(threadUrl(thread.id));
@@ -145,13 +162,29 @@ export class CodexCapability {
     } satisfies CodexCommandValue;
   }
 
-  private async search(query: string) {
-    const threads = await this.client.listThreads(50, query);
+  private async search(scope: CodexSearchScope, query: string) {
+    const projects = scope === "threads" ? undefined : await this.searchProjects(query);
+    const threads = scope === "projects" ? undefined : await this.client.listThreads(100, query);
+    const projectCount = projects?.length ?? 0;
+    const threadCount = threads?.length ?? 0;
     return {
-      message: `Found ${threads.length} matching Codex Task${threads.length === 1 ? "" : "s"}.`,
-      threads,
-      connectionMode: "shared",
+      message: `Found ${projectCount} project${projectCount === 1 ? "" : "s"} and ${threadCount} Codex Task${threadCount === 1 ? "" : "s"}.`,
+      ...(projects ? { projects } : {}),
+      ...(threads ? { threads } : {}),
+      ...(threads ? { connectionMode: "shared" as const } : {}),
     } satisfies CodexCommandValue;
+  }
+
+  private async searchProjects(query: string) {
+    const projects = await this.options.workspaces.search(query);
+    const delegationWorkspace = await this.options.delegations.ensure();
+    const wanted = normalize(query);
+    const delegationMatches = !wanted
+      || normalize("Bob Delegations").includes(wanted)
+      || normalize(delegationWorkspace).includes(wanted);
+    return delegationMatches
+      ? [delegationWorkspace, ...projects.filter((project) => project !== delegationWorkspace)]
+      : projects;
   }
 
   private async status(reference: string | undefined) {
@@ -191,19 +224,9 @@ export class CodexCapability {
   }
 
   private async resolveWorkspace(reference: string | undefined) {
-    const wanted = reference?.trim();
-    if (!wanted) return this.options.delegations.ensure();
-    const candidates = path.isAbsolute(wanted)
-      ? [wanted]
-      : this.options.workspaceRoots.map((root) => path.join(root, wanted));
-    for (const candidate of candidates) {
-      try {
-        if ((await stat(candidate)).isDirectory()) return await realpath(candidate);
-      } catch {
-        // Try the next configured root.
-      }
-    }
-    throw new Error(`Bob could not find the workspace${wanted ? ` “${wanted}”` : ""}. Use an existing project name or absolute path.`);
+    return reference?.trim()
+      ? this.options.workspaces.resolve(reference)
+      : this.options.delegations.ensure();
   }
 }
 
@@ -226,6 +249,10 @@ function normalize(value: string) {
 
 function threadUrl(threadId: string) {
   return `codex://threads/${encodeURIComponent(threadId)}`;
+}
+
+function projectUrl(workspace: string) {
+  return `codex://threads/new?${new URLSearchParams({ path: workspace }).toString()}`;
 }
 
 function taskStatusMessage(title: string, task: CodexTaskUpdate) {

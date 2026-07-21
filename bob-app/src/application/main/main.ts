@@ -7,6 +7,7 @@ import { config } from "dotenv";
 import { CodexAppServerClient } from "../../codex/app-server-client.js";
 import { CodexCapability } from "../../codex/capability.js";
 import { DelegationWorkspace } from "../../codex/delegation-workspace.js";
+import { WorkspaceResolver } from "../../codex/workspace-resolver.js";
 import type { CodexCommand, CodexCommandValue } from "../../contracts/codex.js";
 import { IPC, type IpcResult, type WindowMode } from "../../contracts/ipc.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
@@ -160,7 +161,7 @@ function createCodexCapability() {
     }),
     {
       delegations: new DelegationWorkspace(delegationsRoot()),
-      workspaceRoots: projectRoots(),
+      workspaces: new WorkspaceResolver(projectRoots()),
       openExternal: (url) => shell.openExternal(url),
     },
   );
@@ -313,14 +314,40 @@ function requiredCodexCommand(value: unknown): CodexCommand {
   if (command.type === "monitor") {
     return { type: "monitor", thread: requiredShortText(command.thread, "thread", 1_000) };
   }
-  if (command.type === "interrupt" || command.type === "open" || command.type === "status") {
+  if (command.type === "interrupt" || command.type === "status") {
     const thread = optionalShortText(command.thread, "thread", 1_000);
     return { type: command.type, ...(thread ? { thread } : {}) };
   }
+  if (command.type === "open") {
+    const reference = optionalShortText(command.reference, "reference", 4_096);
+    return {
+      type: "open",
+      target: requiredOpenTarget(command.target),
+      ...(reference ? { reference } : {}),
+    };
+  }
   if (command.type === "search") {
-    return { type: "search", query: optionalShortText(command.query, "query", 1_000) ?? "" };
+    return {
+      type: "search",
+      scope: requiredSearchScope(command.scope),
+      query: optionalShortText(command.query, "query", 1_000) ?? "",
+    };
   }
   throw new Error("The Codex command is invalid.");
+}
+
+function requiredOpenTarget(value: unknown) {
+  if (value !== "app" && value !== "delegations" && value !== "project" && value !== "thread") {
+    throw new Error("The Codex open target is invalid.");
+  }
+  return value;
+}
+
+function requiredSearchScope(value: unknown) {
+  if (value !== "projects" && value !== "threads" && value !== "all") {
+    throw new Error("The Codex search scope is invalid.");
+  }
+  return value;
 }
 
 function requiredEffort(value: unknown) {

@@ -42,9 +42,28 @@ describe("Bob Codex tool routing", () => {
       controlCodex: vi.fn().mockRejectedValue(new Error("Shared daemon unavailable")),
     } as unknown as DesktopBridge;
 
-    await expect(executeCodexTool("search_codex_tasks", JSON.stringify({ query: "Bob" }), bridge)).resolves.toEqual({
+    await expect(executeCodexTool("search_codex", JSON.stringify({ query: "Bob", scope: "all" }), bridge)).resolves.toEqual({
       ok: false,
       error: "Shared daemon unavailable",
+    });
+  });
+
+  it("routes project and task discovery through the generic Codex tools", () => {
+    expect(codexCommand("open_codex", {
+      target: "project",
+      reference: "hackathon prep",
+    })).toEqual({
+      type: "open",
+      target: "project",
+      reference: "hackathon prep",
+    });
+    expect(codexCommand("search_codex", {
+      scope: "all",
+      query: "hackathon",
+    })).toEqual({
+      type: "search",
+      scope: "all",
+      query: "hackathon",
     });
   });
 });

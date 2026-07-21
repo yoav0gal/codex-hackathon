@@ -1,4 +1,6 @@
 export type CodexEffort = "low" | "medium" | "high" | "xhigh";
+export type CodexOpenTarget = "app" | "delegations" | "project" | "thread";
+export type CodexSearchScope = "projects" | "threads" | "all";
 
 export type CodexCommand =
   | {
@@ -23,10 +25,12 @@ export type CodexCommand =
     }
   | {
       type: "open";
-      thread?: string;
+      target: CodexOpenTarget;
+      reference?: string;
     }
   | {
       type: "search";
+      scope: CodexSearchScope;
       query: string;
     }
   | {
@@ -69,5 +73,6 @@ export interface CodexCommandValue {
   connectionMode?: "shared";
   serverVersion?: string;
   task?: CodexTaskUpdate;
+  projects?: string[];
   threads?: CodexThreadSummary[];
 }

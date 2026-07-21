@@ -18,9 +18,12 @@ The repository currently contains a working Realtime foundation:
 - short-lived Realtime client secrets minted in the Electron main process
 - local “Hey, Bob” wake-word detection while sleeping
 - a shared Codex app-server capability owned by Electron main
-- Realtime tools for starting, continuing, monitoring, interrupting, opening,
-  searching, and checking Codex Tasks
+- Realtime tools for finding and opening local Codex projects, plus starting,
+  continuing, monitoring, interrupting, searching, opening, and checking Tasks
 - live completion and attention notifications from Codex back into Bob
+
+Starting, continuing, and monitoring a Codex Task leaves Codex Desktop in the
+background. Bob opens or foregrounds Codex only when the user explicitly asks.
 
 Codex task control is implemented against the managed local app-server daemon.
 Bob and Codex Desktop receive true live updates only when Desktop is launched
