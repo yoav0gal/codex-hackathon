@@ -9,6 +9,16 @@ GESTURES = (
     "both-fists",
     "raise-left-hand",
     "raise-right-hand",
+    "open-palm",
+    "pointing-up",
+    "thumb-down",
+    "thumb-up",
+    "victory",
+    "i-love-you",
+    "left-fist-right-finger-up",
+    "left-fist-right-finger-down",
+    "left-fist-right-finger-left",
+    "left-fist-right-finger-right",
 )
 MODES = ("hold", "tap")
 

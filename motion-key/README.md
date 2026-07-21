@@ -58,12 +58,22 @@ python -m motionkey run --preview --dry-run   # logs keys, sends nothing
 
 ### Gesture bank (built-in — no recording)
 
-`left-fist`, `right-fist`, `both-fists`, `raise-left-hand`, `raise-right-hand`.
+`left-fist`, `right-fist`, `both-fists`, `raise-left-hand`, `raise-right-hand`,
+`open-palm`, `pointing-up`, `thumb-down`, `thumb-up`, `victory`, `i-love-you`,
+`left-fist-right-finger-up`, `left-fist-right-finger-down`,
+`left-fist-right-finger-left`, `left-fist-right-finger-right`.
+
 `bind` only maps a known gesture to a supported key; MotionKey does not record
-or learn gestures.
+or learn gestures. The added AGI Key gestures use explainable landmark
+heuristics, not a trained custom classifier.
 
 A hand is "raised" when it is **open** and held in the upper part of the frame
 (so a raised open hand is distinct from a closed fist).
+
+The `left-fist-right-finger-*` gestures are a clutched joystick: hold your
+physical left hand as a fist, then point your physical right index finger up,
+down, left, or right. While the joystick gesture is active, `left-fist` itself
+is suppressed so it can act as the clutch.
 
 ### Modes
 

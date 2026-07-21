@@ -20,6 +20,11 @@ MODEL_URL = (
 MODEL_PATH = Path.home() / ".motionkey" / "hand_landmarker.task"
 
 WRIST = 0
+THUMB_CMC = 1
+THUMB_MCP = 2
+THUMB_TIP = 4
+INDEX_MCP = 5
+INDEX_TIP = 8
 # (mcp, pip, tip) for index, middle, ring, pinky. Thumb ignored (unreliable).
 FINGERS = [(5, 6, 8), (9, 10, 12), (13, 14, 16), (17, 18, 20)]
 
@@ -40,6 +45,83 @@ def fist_score(pts) -> float:
         if _dist(pts[tip], wrist) < _dist(pts[pip], wrist):
             folded += 1
     return folded / len(FINGERS)
+
+
+def _finger_curled(pts, finger: int) -> bool:
+    """Whether one non-thumb finger is folded toward the wrist."""
+    _mcp, pip, tip = FINGERS[finger]
+    return _dist(pts[tip], pts[WRIST]) < _dist(pts[pip], pts[WRIST])
+
+
+def _finger_extended(pts, finger: int) -> bool:
+    """Whether one non-thumb finger points away from the wrist."""
+    _mcp, pip, tip = FINGERS[finger]
+    return pts[tip][1] < pts[pip][1] and not _finger_curled(pts, finger)
+
+
+def _thumb_sideways(pts) -> bool:
+    tip = pts[THUMB_TIP]
+    mcp = pts[THUMB_MCP]
+    return abs(tip[0] - mcp[0]) > 0.10 and abs(tip[0] - mcp[0]) > abs(tip[1] - mcp[1])
+
+
+def _thumb_vertical_direction(pts) -> str | None:
+    cmc = pts[THUMB_CMC]
+    tip = pts[THUMB_TIP]
+    dx = abs(tip[0] - cmc[0])
+    dy = tip[1] - cmc[1]
+    if abs(dy) <= dx + 0.05 or abs(dy) < 0.08:
+        return None
+    return "down" if dy > 0 else "up"
+
+
+def classify_static_gestures(pts) -> set[str]:
+    """Return AGI-Key-style static gestures visible in one hand.
+
+    These are deliberately simple landmark heuristics so MotionKey keeps its
+    no-recording/no-training MVP shape. They are less rich than MediaPipe's
+    GestureRecognizer classifier, but cheap, explainable, and testable.
+    """
+    extended = [_finger_extended(pts, i) for i in range(4)]
+    curled = [_finger_curled(pts, i) for i in range(4)]
+    curled_count = sum(curled)
+    gestures: set[str] = set()
+
+    if all(extended):
+        gestures.add("open-palm")
+
+    if extended[0] and all(curled[1:]):
+        gestures.add("pointing-up")
+
+    if extended[0] and extended[1] and curled[2] and curled[3]:
+        gestures.add("victory")
+
+    if extended[0] and curled[1] and curled[2] and extended[3] and _thumb_sideways(pts):
+        gestures.add("i-love-you")
+
+    thumb_direction = _thumb_vertical_direction(pts)
+    if curled_count >= 3 and thumb_direction == "up":
+        gestures.add("thumb-up")
+    elif curled_count >= 3 and thumb_direction == "down":
+        gestures.add("thumb-down")
+
+    return gestures
+
+
+def finger_joystick_direction(pts) -> str | None:
+    """Map the index finger vector to up/down/left/right."""
+    base = pts[INDEX_MCP]
+    tip = pts[INDEX_TIP]
+    x = base[0] - tip[0]
+    y = base[1] - tip[1]
+    magnitude = math.hypot(x, y)
+    if magnitude < 0.08:
+        return None
+    x /= magnitude
+    y /= magnitude
+    if abs(x) > abs(y):
+        return "right" if x > 0 else "left"
+    return "up" if y > 0 else "down"
 
 
 def classify_fist(pts, threshold: float = 0.75):

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from motionkey.bindings import BindingStore, load, save
 from motionkey.gesture_engine import Debouncer, GestureEngine, derive_active
 from motionkey.models import HandObs
-from motionkey.hand_detector import classify_fist
+from motionkey.hand_detector import classify_fist, classify_static_gestures
 
 
 class FakeInjector:
@@ -48,9 +48,57 @@ def _closed_hand():
     return pts
 
 
+def _with_thumb(pts, tip):
+    pts = list(pts)
+    pts[1] = (0.5, 0.65)
+    pts[2] = (0.5, 0.58)
+    pts[3] = ((pts[2][0] + tip[0]) / 2, (pts[2][1] + tip[1]) / 2)
+    pts[4] = tip
+    return pts
+
+
+def _pointing_up_hand():
+    pts = _closed_hand()
+    pts[6] = (0.4, 0.56)
+    pts[8] = (0.4, 0.24)
+    return pts
+
+
+def _victory_hand():
+    pts = _closed_hand()
+    pts[6] = (0.4, 0.56)
+    pts[8] = (0.4, 0.24)
+    pts[10] = (0.45, 0.56)
+    pts[12] = (0.45, 0.22)
+    return pts
+
+
+def _i_love_you_hand():
+    pts = _closed_hand()
+    pts[6] = (0.4, 0.56)
+    pts[8] = (0.4, 0.24)
+    pts[18] = (0.55, 0.56)
+    pts[20] = (0.55, 0.24)
+    return _with_thumb(pts, (0.22, 0.58))
+
+
+def _thumb_hand(direction):
+    pts = _closed_hand()
+    return _with_thumb(pts, (0.5, 0.25 if direction == "up" else 0.9))
+
+
 def test_fist_classification():
     assert classify_fist(_open_hand())[0] is False
     assert classify_fist(_closed_hand())[0] is True
+
+
+def test_static_gesture_classification():
+    assert "open-palm" in classify_static_gestures(_open_hand())
+    assert classify_static_gestures(_pointing_up_hand()) == {"pointing-up"}
+    assert classify_static_gestures(_victory_hand()) == {"victory"}
+    assert "i-love-you" in classify_static_gestures(_i_love_you_hand())
+    assert classify_static_gestures(_thumb_hand("up")) == {"thumb-up"}
+    assert classify_static_gestures(_thumb_hand("down")) == {"thumb-down"}
 
 
 # ---- debounce ----
@@ -135,6 +183,33 @@ def test_derive_active():
     assert not c["left-fist"] and not c["right-fist"]
 
 
+def test_derive_active_added_static_gestures():
+    assert derive_active([HandObs("right", False, 1.0, _pointing_up_hand())])["pointing-up"]
+    assert derive_active([HandObs("right", False, 1.0, _victory_hand())])["victory"]
+    assert derive_active([HandObs("right", False, 1.0, _i_love_you_hand())])["i-love-you"]
+    assert derive_active([HandObs("right", False, 1.0, _thumb_hand("up"))])["thumb-up"]
+    assert derive_active([HandObs("right", False, 1.0, _thumb_hand("down"))])["thumb-down"]
+
+
+def test_left_fist_right_finger_joystick():
+    active = derive_active([
+        HandObs("left", True, 1.0, _closed_hand()),
+        HandObs("right", False, 1.0, _pointing_up_hand()),
+    ])
+
+    assert active["left-fist-right-finger-up"]
+    assert not active["left-fist"]
+
+    right = _pointing_up_hand()
+    right[5] = (0.5, 0.5)
+    right[8] = (0.1, 0.5)
+    active = derive_active([
+        HandObs("left", True, 1.0, _closed_hand()),
+        HandObs("right", False, 1.0, right),
+    ])
+    assert active["left-fist-right-finger-right"]
+
+
 # ---- binding validation ----
 
 def test_binding_validation():
@@ -148,6 +223,8 @@ def test_binding_validation():
             pass
     s.set("left-fist", "A", "hold")        # normalizes case
     assert s.bindings["left-fist"].key == "a"
+    s.set("victory", "right", "tap")
+    assert s.bindings["victory"].key == "right"
 
 
 def test_persistence_roundtrip(tmp_path=None):
