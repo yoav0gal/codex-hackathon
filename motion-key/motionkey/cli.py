@@ -7,7 +7,9 @@ import sys
 import time
 
 from . import bindings as bindings_mod
-from .gesture_engine import GestureEngine, derive_active
+from .gesture_engine import (
+    DEADZONE, JOYSTICK_DIRS, GestureEngine, JoystickTracker, derive_active,
+)
 from .key_injector import SUPPORTED_KEYS
 from .models import GESTURES, MODES
 
@@ -63,6 +65,13 @@ def _run(args) -> int:
     injector = KeyInjector(dry_run=args.dry_run)
     engine = GestureEngine(store, injector)
 
+    # Arm the clap-toggled joystick only if the user bound a direction.
+    tracker = (JoystickTracker(deadzone=args.joystick_deadzone,
+                               debug=args.joystick_debug)
+               if set(store.bindings) & set(JOYSTICK_DIRS) else None)
+    if tracker:
+        print("Joystick armed: clap to toggle, right hand steers.")
+
     # Import heavy/native deps only when actually running.
     try:
         from .camera import Camera
@@ -89,7 +98,14 @@ def _run(args) -> int:
             if rgb is None:
                 continue
             hands = detector.detect(rgb)
-            engine.update(derive_active(hands), time.time())
+            now = time.time()
+            active = derive_active(hands)
+            if tracker:
+                was_on = tracker.on
+                active = tracker.merge(active, hands, now)
+                if tracker.on != was_on:
+                    log.info("JOYSTICK %s (clap)", "ON" if tracker.on else "OFF")
+            engine.update(active, now)
             if args.preview:
                 if not camera.show(bgr, hands, engine.stable):
                     break
@@ -132,6 +148,10 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--dry-run", action="store_true",
                    help="log intended key events without sending them")
     r.add_argument("--camera", type=int, default=0, help="camera index (default 0)")
+    r.add_argument("--joystick-deadzone", type=float, default=DEADZONE,
+                   help="neutral radius around center before steering (0..1)")
+    r.add_argument("--joystick-debug", action="store_true",
+                   help="log the wrist-to-wrist gap each frame to tune the clap")
     r.set_defaults(func=_run)
 
     return p

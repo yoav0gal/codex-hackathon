@@ -9,7 +9,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from motionkey.bindings import BindingStore, load, save
-from motionkey.gesture_engine import Debouncer, GestureEngine, derive_active
+from motionkey.gesture_engine import (
+    Debouncer, GestureEngine, JoystickTracker, derive_active,
+)
 from motionkey.models import HandObs
 from motionkey.hand_detector import classify_fist
 
@@ -133,6 +135,48 @@ def test_derive_active():
     c = derive_active([_hand("left", True, 0.9), _hand("right", True, 0.9)])
     assert c["both-fists"]
     assert not c["left-fist"] and not c["right-fist"]
+
+
+# ---- clap-toggled joystick ----
+
+def _at(handed, x, y):
+    lm = [(0.5, 1.0)] * 21
+    lm[0] = (x, y)  # wrist
+    return HandObs(handedness=handed, is_fist=False, confidence=1.0, landmarks=lm)
+
+
+def test_joystick_clap_toggle_and_steer():
+    t = JoystickTracker(deadzone=0.06, clap_dist=0.15, cooldown=0.6)
+    apart = [_at("left", 0.2, 0.5), _at("right", 0.8, 0.5)]
+
+    # not clapped, mode off -> all directions false
+    assert t.update(apart, 0.0) == {d: False for d in JoystickTracker.DIRS}
+
+    # clap (wrists together) toggles mode on; center captured this frame
+    together = [_at("left", 0.49, 0.5), _at("right", 0.51, 0.5)]
+    t.update(together, 1.0)
+    assert t.on
+    assert t.update([_at("right", 0.51, 0.5)], 1.1) == {d: False for d in JoystickTracker.DIRS}
+
+    # move right hand right & up past deadzone -> holds both, others false
+    out = t.update([_at("right", 0.51 + 0.2, 0.5 - 0.2)], 1.2)
+    assert out["joystick-right"] and out["joystick-up"]
+    assert not out["joystick-left"] and not out["joystick-down"]
+
+    # inside deadzone -> neutral
+    assert not any(t.update([_at("right", 0.52, 0.51)], 1.3).values())
+
+    # a flicker back to together within the cooldown must NOT re-toggle
+    t.update(apart, 1.35)                       # release clap edge
+    t.update(together, 1.4)                      # within 0.6s of last toggle
+    assert t.on                                  # still on
+
+    # clap again after cooldown toggles off -> base gestures resume
+    t.update(apart, 2.0)
+    t.update(together, 2.1)
+    assert not t.on
+    merged = t.merge({"left-fist": True}, apart, 2.2)
+    assert merged["left-fist"] and not any(merged[d] for d in JoystickTracker.DIRS)
 
 
 # ---- binding validation ----

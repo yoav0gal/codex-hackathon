@@ -6,6 +6,8 @@ loop feeds it `active` (gesture -> raw bool this frame) plus a timestamp.
 from __future__ import annotations
 
 import logging
+import math
+import time
 
 from .bindings import BindingStore
 
@@ -118,3 +120,103 @@ def derive_active(hands, raise_y: float = RAISE_Y) -> dict[str, bool]:
         "raise-left-hand": left_raise,
         "raise-right-hand": right_raise,
     }
+
+
+JOYSTICK_DIRS = ("joystick-left", "joystick-right", "joystick-up", "joystick-down")
+# Wrist-to-wrist gap (normalized) at or below which the two hands count as a
+# clap, and displacement past which the right hand steers. Both are physical
+# calibration knobs — vary with camera FOV and how close the user sits.
+CLAP_DIST = 0.20
+DEADZONE = 0.06
+
+
+def _wrist(hands, side: str):
+    for h in hands:
+        if h.handedness == side and h.landmarks:
+            return h.landmarks[0]
+    return None
+
+
+class JoystickTracker:
+    """Right hand as a virtual 4-way joystick, toggled by a clap.
+
+    A clap (both wrists within `clap_dist`) toggles joystick mode on its rising
+    edge — one clap on, another off. While on, the right hand's displacement
+    from a center (captured the frame the mode turns on) drives the
+    joystick-* pseudo-gestures: past `deadzone` in a direction holds that
+    direction's key; diagonals hold two. Losing the right hand -> neutral.
+    Frames are mirrored (selfie), so +x is the user's right and +y is down.
+    """
+
+    DIRS = JOYSTICK_DIRS
+
+    def __init__(self, deadzone: float = DEADZONE, clap_dist: float = CLAP_DIST,
+                 cooldown: float = 0.6, debug: bool = False):
+        self.deadzone = deadzone
+        self.clap_dist = clap_dist
+        self.cooldown = cooldown  # ignore claps for this long after a toggle
+        self.debug = debug
+        self.on = False
+        self._center = None       # (x, y) neutral origin, or None until captured
+        self._clap_prev = False   # rising-edge detector for the clap
+        self._last_toggle = float("-inf")
+
+    def _clap(self, hands) -> bool:
+        # Handedness-independent: near-touching hands get mislabeled, so just
+        # measure the gap between the two closest wrists of any two hands.
+        wrists = [h.landmarks[0] for h in hands if h.landmarks]
+        gap = None
+        if len(wrists) >= 2:
+            gap = min(math.hypot(a[0] - b[0], a[1] - b[1])
+                      for i, a in enumerate(wrists) for b in wrists[i + 1:])
+        if self.debug:
+            log.info("clap: %d hand(s), gap=%s (threshold %.3f)",
+                     len(wrists), f"{gap:.3f}" if gap is not None else "n/a",
+                     self.clap_dist)
+        return gap is not None and gap <= self.clap_dist
+
+    def update(self, hands, now: float | None = None) -> dict[str, bool]:
+        if now is None:
+            now = time.monotonic()
+        clap = self._clap(hands)
+        # Rising edge toggles, but a cooldown swallows the detection flicker
+        # (hands occlude mid-clap -> 2->1->2 hands) so one clap == one toggle.
+        if clap and not self._clap_prev and (now - self._last_toggle) >= self.cooldown:
+            self.on = not self.on
+            self._center = None
+            self._last_toggle = now
+        self._clap_prev = clap
+
+        out = {d: False for d in JOYSTICK_DIRS}
+        if not self.on:
+            return out
+        r = _wrist(hands, "right")
+        if r is None:
+            return out                     # hand gone -> neutral, keys release
+        if self._center is None:
+            self._center = r               # capture origin on first sighting
+            return out
+        dx, dy = r[0] - self._center[0], r[1] - self._center[1]
+        if dx > self.deadzone:
+            out["joystick-right"] = True
+        elif dx < -self.deadzone:
+            out["joystick-left"] = True
+        if dy > self.deadzone:
+            out["joystick-down"] = True
+        elif dy < -self.deadzone:
+            out["joystick-up"] = True
+        return out
+
+    def merge(self, active: dict[str, bool], hands,
+              now: float | None = None) -> dict[str, bool]:
+        """Fold joystick activity into base gesture activity.
+
+        Joystick mode is exclusive: while on (or on the clap frame that toggles
+        it) every base gesture is suppressed so steering can't leak stray keys.
+        """
+        js = self.update(hands, now)
+        merged = dict(active)
+        if self.on or self._clap_prev:
+            merged = {g: False for g in merged}
+        merged.update(js)
+        return merged

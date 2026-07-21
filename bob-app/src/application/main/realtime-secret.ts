@@ -1,5 +1,6 @@
 import type { RealtimeClientSecret } from "../../contracts/ipc.js";
 import { BOB_CODEX_TOOLS } from "../../contracts/codex-tools.js";
+import { BOB_MOTIONKEY_TOOLS } from "../../contracts/motionkey-tools.js";
 
 export const REALTIME_MODEL = "gpt-realtime-2.1";
 export const REALTIME_VOICE = "marin";
@@ -14,6 +15,8 @@ const AGENT_INSTRUCTIONS = [
   "Use high reasoning by default. Use low, medium, or xhigh only when the user explicitly requests a different effort or the task clearly warrants it.",
   "When a task identity is uncertain, search first. A thread argument can be a title, distinctive phrase, or task ID.",
   "Bob-created Codex Tasks run autonomously with full local access and no approval prompts by default. If a monitored task still requests user input or attention, never imply that you answered it; tell the user to handle it in Codex Desktop.",
+  "You can also control MotionKey, a local webcam hand-gesture keyboard controller, through control_motionkey: bind or unbind gestures to keys, list the gesture bank or current bindings, and start or stop the live session.",
+  "Starting a live MotionKey session (not dry_run) sends real system-wide keystrokes and needs macOS Accessibility permission; when the user just wants to test, use dry_run. Always confirm before starting a live session.",
   "After a tool returns, state exactly what started, changed, opened, completed, failed, or needs attention.",
 ].join(" ");
 
@@ -48,7 +51,7 @@ export async function mintRealtimeClientSecret({
           model: REALTIME_MODEL,
           output_modalities: ["audio"],
           instructions: AGENT_INSTRUCTIONS,
-          tools: BOB_CODEX_TOOLS,
+          tools: [...BOB_CODEX_TOOLS, ...BOB_MOTIONKEY_TOOLS],
           tool_choice: "auto",
           audio: {
             input: {

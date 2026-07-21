@@ -3,12 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Built-in gesture bank for the MVP. No recording, no learning.
+# joystick-* are driven by JoystickTracker (right hand as a virtual joystick,
+# toggled with both-fists). Binding any of them arms joystick mode.
 GESTURES = (
     "left-fist",
     "right-fist",
     "both-fists",
     "raise-left-hand",
     "raise-right-hand",
+    "joystick-left",
+    "joystick-right",
+    "joystick-up",
+    "joystick-down",
 )
 MODES = ("hold", "tap")
 
