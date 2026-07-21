@@ -9,11 +9,15 @@ import { CodexCapability } from "../../codex/capability.js";
 import { DelegationWorkspace } from "../../codex/delegation-workspace.js";
 import { WorkspaceResolver } from "../../codex/workspace-resolver.js";
 import type { CodexCommand, CodexCommandValue } from "../../contracts/codex.js";
+import type { ChromeCommand, ChromeCommandValue } from "../../contracts/chrome.js";
+import type { ComputerCommand, ComputerCommandValue } from "../../contracts/computer.js";
 import { IPC, type IpcResult, type WindowMode } from "../../contracts/ipc.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
 import { mintRealtimeClientSecret } from "./realtime-secret.js";
 import { SessionStore } from "./session-store.js";
 import { SherpaWakeEngine } from "./sherpa-wake-engine.js";
+import { GoogleChromeCapability } from "./google-chrome-capability.js";
+import { ComputerCapability } from "./computer-capability.js";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const localEnvironment: Record<string, string> = {};
@@ -22,6 +26,8 @@ config({ path: path.join(app.getAppPath(), ".env.local"), processEnv: localEnvir
 let mainWindow: BrowserWindow | undefined;
 let sessions: SessionStore;
 let codex: CodexCapability;
+const chrome = new GoogleChromeCapability();
+const computer = new ComputerCapability();
 let windowMode: WindowMode = "companion";
 const wakeEngine = new SherpaWakeEngine(app.getAppPath());
 
@@ -150,6 +156,12 @@ function registerIpc() {
   }));
   ipcMain.handle(IPC.controlCodex, async (_event, command: unknown): Promise<IpcResult<CodexCommandValue>> => protect(() => (
     codex.execute(requiredCodexCommand(command))
+  )));
+  ipcMain.handle(IPC.controlChrome, async (_event, command: unknown): Promise<IpcResult<ChromeCommandValue>> => protect(() => (
+    chrome.execute(requiredChromeCommand(command))
+  )));
+  ipcMain.handle(IPC.controlComputer, async (_event, command: unknown): Promise<IpcResult<ComputerCommandValue>> => protect(() => (
+    computer.execute(requiredComputerCommand(command))
   )));
 }
 
@@ -348,6 +360,88 @@ function requiredSearchScope(value: unknown) {
     throw new Error("The Codex search scope is invalid.");
   }
   return value;
+}
+
+function requiredChromeCommand(value: unknown): ChromeCommand {
+  if (!value || typeof value !== "object") throw new Error("The Google Chrome command is invalid.");
+  const command = value as Record<string, unknown>;
+  if (command.type === "open") {
+    const url = optionalUrl(command.url);
+    return { type: "open", ...(url ? { url } : {}) };
+  }
+  if (command.type === "navigate" || command.type === "newTab") {
+    return { type: command.type, url: requiredUrl(command.url) };
+  }
+  throw new Error("The Google Chrome command is invalid.");
+}
+
+function requiredComputerCommand(value: unknown): ComputerCommand {
+  if (!value || typeof value !== "object") throw new Error("The desktop command is invalid.");
+  const command = value as Record<string, unknown>;
+  const display = optionalInteger(command.display, "display", 0, 15) ?? 0;
+  if (command.type === "see") return { type: "see", display };
+  if (command.type === "type") return { type: "type", text: requiredShortText(command.text, "text", 10_000) };
+  if (command.type === "key") return { type: "key", keys: requiredShortText(command.keys, "keys", 100) };
+  if (command.type === "click") {
+    const button = command.button === "right" ? "right" : command.button === undefined || command.button === "left" ? "left" : invalidDesktopCommand();
+    const count = command.count === 2 ? 2 : command.count === undefined || command.count === 1 ? 1 : invalidDesktopCommand();
+    return { type: "click", display, x: normalizedCoordinate(command.x, "x"), y: normalizedCoordinate(command.y, "y"), button, count };
+  }
+  if (command.type === "drag") {
+    return {
+      type: "drag", display,
+      fromX: normalizedCoordinate(command.fromX, "fromX"), fromY: normalizedCoordinate(command.fromY, "fromY"),
+      toX: normalizedCoordinate(command.toX, "toX"), toY: normalizedCoordinate(command.toY, "toY"),
+    };
+  }
+  if (command.type === "scroll") {
+    return {
+      type: "scroll", display, x: normalizedCoordinate(command.x, "x"), y: normalizedCoordinate(command.y, "y"),
+      deltaX: boundedInteger(command.deltaX, "deltaX", -10_000, 10_000), deltaY: boundedInteger(command.deltaY, "deltaY", -10_000, 10_000),
+    };
+  }
+  throw new Error("The desktop command is invalid.");
+}
+
+function normalizedCoordinate(value: unknown, field: string) {
+  return boundedInteger(value, field, 0, 1_000);
+}
+
+function optionalInteger(value: unknown, field: string, minimum: number, maximum: number) {
+  if (value === undefined) return undefined;
+  return boundedInteger(value, field, minimum, maximum);
+}
+
+function boundedInteger(value: unknown, field: string, minimum: number, maximum: number) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new Error(`The desktop ${field} is invalid.`);
+  }
+  return value;
+}
+
+function invalidDesktopCommand(): never {
+  throw new Error("The desktop command is invalid.");
+}
+
+function requiredUrl(value: unknown) {
+  const url = optionalUrl(value);
+  if (!url) throw new Error("A Google Chrome URL is required.");
+  return url;
+}
+
+function optionalUrl(value: unknown) {
+  const url = optionalShortText(value, "url", 8_192);
+  if (!url) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("The Google Chrome URL is invalid.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("The Google Chrome URL must use http or https.");
+  }
+  return parsed.toString();
 }
 
 function requiredEffort(value: unknown) {

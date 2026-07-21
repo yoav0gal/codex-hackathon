@@ -1,7 +1,11 @@
 import type { CodexCommand, CodexEffort } from "../contracts/codex";
 import type { DesktopBridge } from "../contracts/ipc";
+import { executeChromeTool } from "./chrome-tool-router";
+import { executeComputerTool } from "./computer-tool-router";
 
 export async function executeCodexTool(name: string, rawArguments: string, bridge: DesktopBridge) {
+  if (name === "control_google_chrome") return executeChromeTool(rawArguments, bridge);
+  if (name === "control_computer") return executeComputerTool(rawArguments, bridge);
   try {
     const parsed = JSON.parse(rawArguments) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

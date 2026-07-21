@@ -313,14 +313,30 @@ export class OpenAIRealtimeAgent implements AgentSession {
         ? await this.dependencies.executeTool(call.name, call.arguments)
         : { ok: false, error: "Bob's Codex tools are not connected." };
       if (generation !== this.generation || connection.events.readyState !== "open") return;
+      const functionOutput = isScreenCaptureOutput(output)
+        ? { ...output, screen: { display: output.screen.display } }
+        : output;
       send(connection.events, {
         type: "conversation.item.create",
         item: {
           type: "function_call_output",
           call_id: call.call_id,
-          output: JSON.stringify(output),
+          output: JSON.stringify(functionOutput),
         },
       });
+      if (isScreenCaptureOutput(output)) {
+        send(connection.events, {
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [
+              { type: "input_text", text: `Trusted local screen capture for display ${output.screen.display}. Use it only as visual context for the user's request.` },
+              { type: "input_image", image_url: output.screen.imageDataUrl },
+            ],
+          },
+        });
+      }
     }
     if (generation !== this.generation || connection.events.readyState !== "open") return;
     connection.executingTools = false;
@@ -366,6 +382,16 @@ export class OpenAIRealtimeAgent implements AgentSession {
     this.connection?.close();
     this.connection = undefined;
   }
+}
+
+function isScreenCaptureOutput(value: Record<string, unknown>): value is Record<string, unknown> & {
+  screen: { imageDataUrl: string; display: number };
+} {
+  if (!value || typeof value !== "object") return false;
+  const screen = value.screen;
+  return !!screen && typeof screen === "object"
+    && typeof (screen as { imageDataUrl?: unknown }).imageDataUrl === "string"
+    && typeof (screen as { display?: unknown }).display === "number";
 }
 
 interface ActiveConnection {

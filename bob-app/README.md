@@ -20,6 +20,10 @@ The repository currently contains a working Realtime foundation:
 - a shared Codex app-server capability owned by Electron main
 - Realtime tools for finding and opening local Codex projects, plus starting,
   continuing, monitoring, interrupting, searching, opening, and checking Tasks
+- a Google Chrome tool that can launch or focus Chrome, navigate its active
+  tab, or open a new tab (macOS)
+- a macOS desktop-control tool for screen capture, mouse actions, scrolling,
+  text entry, and keyboard shortcuts
 - live completion and attention notifications from Codex back into Bob
 
 Starting, continuing, and monitoring a Codex Task leaves Codex Desktop in the

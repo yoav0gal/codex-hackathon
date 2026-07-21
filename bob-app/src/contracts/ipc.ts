@@ -1,5 +1,7 @@
 import type { ChatSession, NewMessageInput, SessionSummary } from "./sessions.js";
 import type { CodexCommand, CodexCommandValue, CodexTaskUpdate } from "./codex.js";
+import type { ChromeCommand, ChromeCommandValue } from "./chrome.js";
+import type { ComputerCommand, ComputerCommandValue } from "./computer.js";
 
 export const IPC = {
   getRealtimeClientSecret: "realtime:get-client-secret",
@@ -16,6 +18,8 @@ export const IPC = {
   processWakeAudio: "wake:process-audio",
   stopWakeEngine: "wake:stop",
   controlCodex: "codex:control",
+  controlChrome: "chrome:control",
+  controlComputer: "computer:control",
   codexTaskUpdate: "codex:task-update",
 } as const;
 
@@ -40,6 +44,8 @@ export interface DesktopBridge {
   processWakeAudio(samples: Float32Array, sampleRate: number): Promise<boolean>;
   stopWakeEngine(): Promise<void>;
   controlCodex(command: CodexCommand): Promise<CodexCommandValue>;
+  controlChrome(command: ChromeCommand): Promise<ChromeCommandValue>;
+  controlComputer(command: ComputerCommand): Promise<ComputerCommandValue>;
   onCodexTaskUpdate(listener: (update: CodexTaskUpdate) => void): () => void;
 }
 

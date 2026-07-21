@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 import type { DesktopBridge, IpcResult, RealtimeClientSecret, WindowMode } from "../../contracts/ipc.js";
 import type { CodexCommand, CodexCommandValue, CodexTaskUpdate } from "../../contracts/codex.js";
+import type { ChromeCommand, ChromeCommandValue } from "../../contracts/chrome.js";
+import type { ComputerCommand, ComputerCommandValue } from "../../contracts/computer.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
 
 const channels: Record<keyof DesktopBridge, string> = {
@@ -18,6 +20,8 @@ const channels: Record<keyof DesktopBridge, string> = {
   processWakeAudio: "wake:process-audio",
   stopWakeEngine: "wake:stop",
   controlCodex: "codex:control",
+  controlChrome: "chrome:control",
+  controlComputer: "computer:control",
   onCodexTaskUpdate: "codex:task-update",
 };
 
@@ -38,6 +42,8 @@ const bridge: DesktopBridge = {
   processWakeAudio: (samples, sampleRate) => invoke<boolean>(channels.processWakeAudio, samples, sampleRate),
   stopWakeEngine: () => invoke<void>(channels.stopWakeEngine),
   controlCodex: (command: CodexCommand) => invoke<CodexCommandValue>(channels.controlCodex, command),
+  controlChrome: (command: ChromeCommand) => invoke<ChromeCommandValue>(channels.controlChrome, command),
+  controlComputer: (command: ComputerCommand) => invoke<ComputerCommandValue>(channels.controlComputer, command),
   onCodexTaskUpdate: (listener) => {
     const receive = (_event: Electron.IpcRendererEvent, value: unknown) => {
       if (isCodexTaskUpdate(value)) listener(value);
