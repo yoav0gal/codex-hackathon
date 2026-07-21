@@ -1,0 +1,237 @@
+import { stat, realpath } from "node:fs/promises";
+import path from "node:path";
+import type {
+  CodexCommand,
+  CodexCommandValue,
+  CodexEffort,
+  CodexTaskUpdate,
+  CodexThreadSummary,
+} from "../contracts/codex.js";
+import { CodexAppServerClient, isTerminalCodexStatus } from "./app-server-client.js";
+import type { DelegationWorkspace } from "./delegation-workspace.js";
+
+export interface CodexCapabilityOptions {
+  delegations: DelegationWorkspace;
+  workspaceRoots: string[];
+  openExternal(url: string): Promise<void>;
+}
+
+/** Intent-level interface used by Electron IPC and Realtime tools. */
+export class CodexCapability {
+  private activeThreadId: string | undefined;
+
+  constructor(
+    private readonly client: CodexAppServerClient,
+    private readonly options: CodexCapabilityOptions,
+  ) {
+    this.client.onUpdate((update) => {
+      this.activeThreadId = update.threadId;
+    });
+  }
+
+  onTaskUpdate(listener: (update: CodexTaskUpdate) => void) {
+    return this.client.onUpdate(listener);
+  }
+
+  async execute(command: CodexCommand): Promise<CodexCommandValue> {
+    if (command.type === "start") return this.start(command.task, command.workspace, command.effort);
+    if (command.type === "continue") return this.continue(command.instruction, command.thread, command.effort);
+    if (command.type === "monitor") return this.monitor(command.thread);
+    if (command.type === "interrupt") return this.interrupt(command.thread);
+    if (command.type === "open") return this.open(command.thread);
+    if (command.type === "search") return this.search(command.query);
+    return this.status(command.thread);
+  }
+
+  async connect() {
+    return this.client.connect();
+  }
+
+  dispose() {
+    this.client.dispose();
+  }
+
+  private async start(task: string, workspaceReference: string | undefined, effort: CodexEffort) {
+    const workspace = workspaceReference
+      ? await this.resolveWorkspace(workspaceReference)
+      : await this.options.delegations.ensure();
+    const connection = await this.client.connect();
+    const threadId = await this.client.startThread(workspace, effort);
+    this.activeThreadId = threadId;
+    const turnId = await this.client.startTurn(threadId, task, effort);
+    await this.options.openExternal(threadUrl(threadId));
+    return {
+      message: "Started the Codex Task and opened the same live task in Codex Desktop. Bob will report completion or anything requiring attention.",
+      threadId,
+      turnId,
+      workspace,
+      connectionMode: connection.mode,
+      ...(connection.serverVersion ? { serverVersion: connection.serverVersion } : {}),
+    } satisfies CodexCommandValue;
+  }
+
+  private async continue(instruction: string, reference: string | undefined, effort: CodexEffort) {
+    const thread = await this.resolveThread(reference);
+    const connection = await this.client.connect();
+    await this.client.resumeThread(thread.id);
+    this.activeThreadId = thread.id;
+    await this.options.openExternal(threadUrl(thread.id));
+    const current = this.client.getLatestUpdate(thread.id);
+    if (current?.status === "needsAttention") {
+      throw new Error("This Codex Task is waiting for attention in Codex Desktop. Resolve that request there before continuing it.");
+    }
+    const turnId = current?.status === "inProgress"
+      ? await this.client.steerTurn(thread.id, current.turnId, instruction)
+      : await this.client.startTurn(thread.id, instruction, effort);
+    return {
+      message: current?.status === "inProgress"
+        ? "Steered the active Codex turn. Bob remains subscribed to its live updates."
+        : "Continued the Codex Task in a new turn. Bob remains subscribed to its live updates.",
+      threadId: thread.id,
+      turnId,
+      workspace: thread.workspace,
+      connectionMode: connection.mode,
+      ...(connection.serverVersion ? { serverVersion: connection.serverVersion } : {}),
+    } satisfies CodexCommandValue;
+  }
+
+  private async monitor(reference: string) {
+    const thread = await this.resolveThread(reference);
+    const connection = await this.client.connect();
+    await this.client.resumeThread(thread.id);
+    this.activeThreadId = thread.id;
+    const task = this.client.getLatestUpdate(thread.id);
+    return {
+      message: `Bob is now monitoring “${thread.title}” and will report completion or anything requiring attention.`,
+      threadId: thread.id,
+      workspace: thread.workspace,
+      connectionMode: connection.mode,
+      ...(connection.serverVersion ? { serverVersion: connection.serverVersion } : {}),
+      ...(task ? { task } : {}),
+    } satisfies CodexCommandValue;
+  }
+
+  private async interrupt(reference: string | undefined) {
+    const thread = await this.resolveThread(reference);
+    await this.client.resumeThread(thread.id);
+    const task = this.client.getLatestUpdate(thread.id);
+    if (!task || isTerminalCodexStatus(task.status)) {
+      throw new Error("That Codex Task has no active turn to interrupt.");
+    }
+    await this.client.interruptTurn(thread.id, task.turnId);
+    this.activeThreadId = thread.id;
+    return {
+      message: "Asked Codex to interrupt the active turn.",
+      threadId: thread.id,
+      turnId: task.turnId,
+      workspace: thread.workspace,
+      connectionMode: "shared",
+    } satisfies CodexCommandValue;
+  }
+
+  private async open(reference: string | undefined) {
+    if (!reference && !this.activeThreadId) {
+      const workspace = await this.options.delegations.ensure();
+      await this.options.openExternal(`codex://threads/new?${new URLSearchParams({ path: workspace })}`);
+      return { message: "Opened the Bob Delegations project in Codex Desktop.", workspace } satisfies CodexCommandValue;
+    }
+    const thread = await this.resolveThread(reference);
+    this.activeThreadId = thread.id;
+    await this.options.openExternal(threadUrl(thread.id));
+    return {
+      message: `Opened “${thread.title}” in Codex Desktop.`,
+      threadId: thread.id,
+      workspace: thread.workspace,
+    } satisfies CodexCommandValue;
+  }
+
+  private async search(query: string) {
+    const threads = await this.client.listThreads(50, query);
+    return {
+      message: `Found ${threads.length} matching Codex Task${threads.length === 1 ? "" : "s"}.`,
+      threads,
+      connectionMode: "shared",
+    } satisfies CodexCommandValue;
+  }
+
+  private async status(reference: string | undefined) {
+    const thread = await this.resolveThread(reference);
+    await this.client.resumeThread(thread.id);
+    this.activeThreadId = thread.id;
+    const task = this.client.getLatestUpdate(thread.id);
+    return {
+      message: task
+        ? taskStatusMessage(thread.title, task)
+        : `Bob is subscribed to “${thread.title}”, but it has no available turn state yet.`,
+      threadId: thread.id,
+      workspace: thread.workspace,
+      connectionMode: "shared",
+      ...(task ? { turnId: task.turnId, task } : {}),
+    } satisfies CodexCommandValue;
+  }
+
+  private async resolveThread(reference: string | undefined): Promise<CodexThreadSummary> {
+    const wanted = reference?.trim() || this.activeThreadId;
+    if (!wanted) throw new Error("Tell Bob which Codex Task to use.");
+    const recent = await this.client.listThreads(100, wanted);
+    const candidates = recent.length > 0 ? recent : await this.client.listThreads(100);
+    const exactId = candidates.find((thread) => thread.id === wanted);
+    if (exactId) return exactId;
+    const normalized = normalize(wanted);
+    const ranked = candidates
+      .map((thread) => ({ thread, score: threadScore(thread, normalized) }))
+      .filter((candidate) => candidate.score > 0)
+      .sort((left, right) => right.score - left.score || right.thread.updatedAt - left.thread.updatedAt);
+    const best = ranked[0];
+    if (!best) throw new Error(`Bob could not find a Codex Task matching “${wanted}”.`);
+    if (ranked[1]?.score === best.score && ranked[1].thread.title !== best.thread.title) {
+      throw new Error("Bob found more than one close Codex Task. Say more of its title.");
+    }
+    return best.thread;
+  }
+
+  private async resolveWorkspace(reference: string | undefined) {
+    const wanted = reference?.trim();
+    if (!wanted) return this.options.delegations.ensure();
+    const candidates = path.isAbsolute(wanted)
+      ? [wanted]
+      : this.options.workspaceRoots.map((root) => path.join(root, wanted));
+    for (const candidate of candidates) {
+      try {
+        if ((await stat(candidate)).isDirectory()) return await realpath(candidate);
+      } catch {
+        // Try the next configured root.
+      }
+    }
+    throw new Error(`Bob could not find the workspace${wanted ? ` “${wanted}”` : ""}. Use an existing project name or absolute path.`);
+  }
+}
+
+function threadScore(thread: CodexThreadSummary, wanted: string) {
+  const title = normalize(thread.title);
+  const preview = normalize(thread.preview);
+  if (title === wanted) return 1_000;
+  if (preview === wanted) return 950;
+  if (title.includes(wanted)) return 800;
+  if (preview.includes(wanted)) return 750;
+  const words = wanted.split(" ").filter(Boolean);
+  if (words.length > 0 && words.every((word) => title.includes(word))) return 600;
+  if (words.length > 0 && words.every((word) => preview.includes(word))) return 550;
+  return 0;
+}
+
+function normalize(value: string) {
+  return value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function threadUrl(threadId: string) {
+  return `codex://threads/${encodeURIComponent(threadId)}`;
+}
+
+function taskStatusMessage(title: string, task: CodexTaskUpdate) {
+  if (task.status === "needsAttention") return `“${title}” needs attention in Codex Desktop.`;
+  if (task.status === "completed") return `“${title}” completed.${task.assistantText ? ` ${task.assistantText}` : ""}`;
+  if (task.status === "failed") return `“${title}” failed.${task.error ? ` ${task.error}` : ""}`;
+  if (task.status === "interrupted") return `“${title}” was interrupted.`;
+  return `“${title}” is still in progress.${task.assistantText ? ` Latest update: ${task.assistantText}` : ""}`;
+}

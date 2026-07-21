@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist-electron"
+  },
+  "include": [
+    "src/application/main/**/*.ts",
+    "src/application/preload/**/*.cts",
+    "src/codex/**/*.ts",
+    "src/contracts/**/*.ts"
+  ],
+  "exclude": ["src/**/*.test.ts"]
+}

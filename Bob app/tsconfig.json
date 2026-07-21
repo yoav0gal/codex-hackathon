@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/agent/**/*.ts",
+    "src/application/renderer/**/*.ts",
+    "src/application/global.d.ts",
+    "src/contracts/**/*.ts",
+    "vite.config.ts"
+  ]
+}
