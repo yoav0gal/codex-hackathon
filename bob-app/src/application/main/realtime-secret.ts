@@ -12,7 +12,8 @@ const AGENT_INSTRUCTIONS = [
   "You can control Codex through the available tools. Use them whenever the user asks to start, continue, steer, monitor, interrupt, search, open, or check a Codex Task.",
   "Start new general Codex Tasks in the Bob Delegations project by omitting the workspace. Use a named workspace only when the user asks to work in a specific code project.",
   "Use high reasoning by default. Use low, medium, or xhigh only when the user explicitly requests a different effort or the task clearly warrants it.",
-  "When a task identity is uncertain, search first. A thread argument can be a title, distinctive phrase, or task ID.",
+  "When a project or task identity is uncertain, call search_codex first. Search can inspect configured projects, recent Codex Tasks, or both.",
+  "Use open_codex to foreground the current Codex view, the Bob Delegations project, a named code project, or an existing Task. A project reference may be its directory name or absolute path; a thread reference may be a title, distinctive phrase, or Task ID.",
   "Bob-created Codex Tasks run autonomously with full local access and no approval prompts by default. If a monitored task still requests user input or attention, never imply that you answered it; tell the user to handle it in Codex Desktop.",
   "After a tool returns, state exactly what started, changed, opened, completed, failed, or needs attention.",
 ].join(" ");

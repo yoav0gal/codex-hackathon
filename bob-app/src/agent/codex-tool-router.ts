@@ -37,15 +37,38 @@ export function codexCommand(name: string, arguments_: Record<string, unknown>):
   if (name === "monitor_codex_task") {
     return { type: "monitor", thread: requiredString(arguments_, "thread") };
   }
-  if (name === "interrupt_codex_task" || name === "open_codex_task" || name === "get_codex_task_status") {
-    const type = name === "interrupt_codex_task" ? "interrupt" : name === "open_codex_task" ? "open" : "status";
+  if (name === "interrupt_codex_task" || name === "get_codex_task_status") {
+    const type = name === "interrupt_codex_task" ? "interrupt" : "status";
     const thread = optionalString(arguments_, "thread");
     return { type, ...(thread ? { thread } : {}) };
   }
-  if (name === "search_codex_tasks") {
-    return { type: "search", query: stringValue(arguments_, "query") };
+  if (name === "open_codex") {
+    return {
+      type: "open",
+      target: openTarget(arguments_),
+      ...(optionalString(arguments_, "reference") ? { reference: optionalString(arguments_, "reference") } : {}),
+    };
+  }
+  if (name === "search_codex") {
+    return { type: "search", scope: searchScope(arguments_), query: stringValue(arguments_, "query") };
   }
   throw new Error(`Bob does not support the Codex tool “${name}”.`);
+}
+
+function openTarget(arguments_: Record<string, unknown>) {
+  const value = arguments_.target;
+  if (value !== "app" && value !== "delegations" && value !== "project" && value !== "thread") {
+    throw new Error("The Codex tool has an invalid open target.");
+  }
+  return value;
+}
+
+function searchScope(arguments_: Record<string, unknown>) {
+  const value = arguments_.scope;
+  if (value !== "projects" && value !== "threads" && value !== "all") {
+    throw new Error("The Codex tool has an invalid search scope.");
+  }
+  return value;
 }
 
 function effort(arguments_: Record<string, unknown>): CodexEffort {

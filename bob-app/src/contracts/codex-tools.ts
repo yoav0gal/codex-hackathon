@@ -52,25 +52,28 @@ export const BOB_CODEX_TOOLS = [
   },
   {
     type: "function",
-    name: "open_codex_task",
-    description: "Open Codex Desktop at a task, or open the default Codex project view when no task is provided.",
+    name: "open_codex",
+    description: "Open or foreground Codex Desktop at the current view, the Bob Delegations project, a named code project, or an existing task.",
     parameters: {
       type: "object",
       properties: {
-        thread: { type: "string", description: "Optional task title, distinctive phrase, or ID." },
+        target: { type: "string", enum: ["app", "delegations", "project", "thread"] },
+        reference: { type: "string", description: "Project name/path or task title/ID. Required for project and thread." },
       },
+      required: ["target"],
     },
   },
   {
     type: "function",
-    name: "search_codex_tasks",
-    description: "Search recent Codex Tasks by title or message preview before opening, monitoring, or continuing one.",
+    name: "search_codex",
+    description: "Search configured local code projects, recent Codex Tasks, or both before opening or delegating to a target.",
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search text. Use an empty string to list recent tasks." },
+        query: { type: "string", description: "Project or task name. Use an empty string to list recent/default choices." },
+        scope: { type: "string", enum: ["projects", "threads", "all"] },
       },
-      required: ["query"],
+      required: ["query", "scope"],
     },
   },
   {

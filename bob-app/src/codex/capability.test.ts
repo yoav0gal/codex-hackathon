@@ -3,6 +3,7 @@ import type { CodexTaskUpdate, CodexThreadSummary } from "../contracts/codex.js"
 import type { CodexAppServerClient } from "./app-server-client.js";
 import { CodexCapability } from "./capability.js";
 import type { DelegationWorkspace } from "./delegation-workspace.js";
+import type { WorkspaceResolver } from "./workspace-resolver.js";
 
 const thread: CodexThreadSummary = {
   id: "thread-123",
@@ -33,12 +34,16 @@ function setup(update?: CodexTaskUpdate) {
   const delegations = {
     ensure: vi.fn().mockResolvedValue("/private/tmp/Bob Delegations"),
   };
+  const workspaces = {
+    resolve: vi.fn(async (reference: string) => `/code/${reference}`),
+    search: vi.fn().mockResolvedValue(["/code/hackathon-prep"]),
+  };
   const capability = new CodexCapability(client as unknown as CodexAppServerClient, {
     delegations: delegations as unknown as DelegationWorkspace,
-    workspaceRoots: ["/tmp"],
+    workspaces: workspaces as unknown as WorkspaceResolver,
     openExternal,
   });
-  return { capability, client, delegations, openExternal, emit: (value: CodexTaskUpdate) => listener?.(value) };
+  return { capability, client, delegations, workspaces, openExternal, emit: (value: CodexTaskUpdate) => listener?.(value) };
 }
 
 describe("Codex capability", () => {
@@ -58,17 +63,47 @@ describe("Codex capability", () => {
     expect(client.startThread).toHaveBeenCalledWith("/private/tmp/Bob Delegations", "medium");
     expect(client.startTurn).toHaveBeenCalledWith("thread-123", "Fix the login test", "medium");
     expect(openExternal).toHaveBeenCalledWith("codex://threads/thread-123");
-    expect(client.startTurn.mock.invocationCallOrder[0]).toBeLessThan(openExternal.mock.invocationCallOrder[0]);
+    expect(openExternal.mock.invocationCallOrder[0]).toBeLessThan(client.startTurn.mock.invocationCallOrder[0]);
   });
 
-  it("opens the Bob Delegations project when no task is active", async () => {
+  it("opens the Bob Delegations project", async () => {
     const { capability, delegations, openExternal } = setup();
 
-    await expect(capability.execute({ type: "open" })).resolves.toMatchObject({
+    await expect(capability.execute({ type: "open", target: "delegations" })).resolves.toMatchObject({
       workspace: "/private/tmp/Bob Delegations",
     });
     expect(delegations.ensure).toHaveBeenCalledOnce();
     expect(openExternal).toHaveBeenCalledWith("codex://threads/new?path=%2Fprivate%2Ftmp%2FBob+Delegations");
+  });
+
+  it("opens a named project without creating a task", async () => {
+    const { capability, workspaces, openExternal, client } = setup();
+
+    await expect(capability.execute({
+      type: "open",
+      target: "project",
+      reference: "hackathon-prep",
+    })).resolves.toMatchObject({ workspace: "/code/hackathon-prep" });
+
+    expect(workspaces.resolve).toHaveBeenCalledWith("hackathon-prep");
+    expect(openExternal).toHaveBeenCalledWith("codex://threads/new?path=%2Fcode%2Fhackathon-prep");
+    expect(client.startThread).not.toHaveBeenCalled();
+  });
+
+  it("searches configured projects and persisted Codex Tasks together", async () => {
+    const { capability, workspaces, client } = setup();
+
+    await expect(capability.execute({
+      type: "search",
+      scope: "all",
+      query: "hackathon",
+    })).resolves.toMatchObject({
+      projects: ["/code/hackathon-prep"],
+      threads: [thread],
+    });
+
+    expect(workspaces.search).toHaveBeenCalledWith("hackathon");
+    expect(client.listThreads).toHaveBeenCalledWith(100, "hackathon");
   });
 
   it("steers an in-progress task instead of creating a competing turn", async () => {
