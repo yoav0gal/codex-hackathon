@@ -87,7 +87,7 @@ needed, and Codex Desktop remains the interaction surface. Run
 the command fails when Desktop is still using its private stdio servers.
 
 Optional `.env.local` settings are documented in `.env.example`. By default,
-Bob uses `gpt-5.6-terra` with `high` reasoning by default, creates general Codex Tasks in the dedicated
+Bob uses `gpt-5.6-terra` with `low` reasoning by default, creates general Codex Tasks in the dedicated
 `~/Documents/Bob Delegations` project, and uses `~/code` for explicit
 project-name resolution. Set `BOB_DELEGATIONS_ROOT` to customize that project
 folder. Bob-created and resumed Tasks run in YOLO mode by default: approval

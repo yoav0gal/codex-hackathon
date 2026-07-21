@@ -8,7 +8,7 @@ export const BOB_CODEX_TOOLS = [
       properties: {
         task: { type: "string", description: "A short, direct, outcome-focused instruction containing the user's requested action and necessary target details." },
         workspace: { type: "string", description: "Optional project name or absolute path. Omit for the Bob Delegations project." },
-        effort: { type: "string", enum: ["low", "medium", "high", "xhigh"], description: "Optional reasoning effort. Defaults to high." },
+        effort: { type: "string", enum: ["low", "medium", "high", "xhigh"], description: "Optional reasoning effort. Defaults to low." },
       },
       required: ["task"],
     },
@@ -22,7 +22,7 @@ export const BOB_CODEX_TOOLS = [
       properties: {
         instruction: { type: "string", description: "The new instruction for Codex." },
         thread: { type: "string", description: "Optional task title, distinctive phrase, or ID. Omit for Bob's active task." },
-        effort: { type: "string", enum: ["low", "medium", "high", "xhigh"], description: "Optional reasoning effort. Defaults to high." },
+        effort: { type: "string", enum: ["low", "medium", "high", "xhigh"], description: "Optional reasoning effort. Defaults to low." },
       },
       required: ["instruction"],
     },

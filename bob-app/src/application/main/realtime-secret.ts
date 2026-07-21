@@ -14,7 +14,7 @@ const AGENT_INSTRUCTIONS = [
   "Keep fallback task prompts short, literal, and outcome-focused. Include only the user's requested action and necessary target details. For example, if the user asks you to open Chrome but you have no Chrome tool, start a Codex Task with: Open Chrome, look for <what the user requested>, and bring Chrome to the front of the computer.",
   "You can control Codex through the available tools. Use them whenever the user asks to start, continue, steer, monitor, interrupt, search, open, or check a Codex Task.",
   "Start new general Codex Tasks in the Bob Delegations project by omitting the workspace. Use a named workspace only when the user asks to work in a specific code project.",
-  "Use high reasoning by default. Use low, medium, or xhigh only when the user explicitly requests a different effort or the task clearly warrants it.",
+  "Use low reasoning for Codex Tasks by default. Use medium, high, or xhigh only when the user explicitly requests a different effort or the task clearly warrants it.",
   "When a project or task identity is uncertain, call search_codex first. Search can inspect configured projects, recent Codex Tasks, or both.",
   "Codex Tasks start, continue, and run in the background. Never call open_codex merely because you started, continued, or monitored a Task.",
   "Call open_codex only when the user explicitly asks to open, show, or bring Codex Desktop to the foreground. A request to bring another application, such as Chrome, to the foreground belongs in the delegated task and is not a request to open Codex.",

@@ -73,7 +73,7 @@ function searchScope(arguments_: Record<string, unknown>) {
 
 function effort(arguments_: Record<string, unknown>): CodexEffort {
   const value = arguments_.effort;
-  if (value === undefined) return "high";
+  if (value === undefined) return "low";
   if (value !== "low" && value !== "medium" && value !== "high" && value !== "xhigh") {
     throw new Error("The Codex tool has an invalid effort.");
   }
