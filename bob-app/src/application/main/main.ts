@@ -10,9 +10,11 @@ import { DelegationWorkspace } from "../../codex/delegation-workspace.js";
 import { WorkspaceResolver } from "../../codex/workspace-resolver.js";
 import type { CodexCommand, CodexCommandValue } from "../../contracts/codex.js";
 import type { MotionKeyCommand, MotionKeyGestureMode, MotionKeyResult } from "../../contracts/motionkey.js";
+import type { ChromeCommand, ChromeResult } from "../../contracts/chrome.js";
 import { IPC, type IpcResult, type WindowMode } from "../../contracts/ipc.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
 import { MotionKeyController, resolveMotionKeyPaths } from "./motionkey-controller.js";
+import { ChromeController } from "./chrome-controller.js";
 import { mintRealtimeClientSecret } from "./realtime-secret.js";
 import { SessionStore } from "./session-store.js";
 import { SherpaWakeEngine } from "./sherpa-wake-engine.js";
@@ -25,6 +27,7 @@ let mainWindow: BrowserWindow | undefined;
 let sessions: SessionStore;
 let codex: CodexCapability;
 let motionKey: MotionKeyController;
+let chrome: ChromeController;
 let windowMode: WindowMode = "companion";
 const wakeEngine = new SherpaWakeEngine(app.getAppPath());
 
@@ -45,6 +48,7 @@ else {
     sessions = new SessionStore(path.join(app.getPath("userData"), "sessions.json"));
     codex = createCodexCapability();
     motionKey = createMotionKeyController();
+    chrome = new ChromeController();
     registerIpc();
     configureMediaPermissions();
     createWindow();
@@ -158,6 +162,9 @@ function registerIpc() {
   )));
   ipcMain.handle(IPC.controlMotionKey, async (_event, command: unknown): Promise<IpcResult<MotionKeyResult>> => protect(() => (
     motionKey.execute(requiredMotionKeyCommand(command))
+  )));
+  ipcMain.handle(IPC.controlChrome, async (_event, command: unknown): Promise<IpcResult<ChromeResult>> => protect(() => (
+    chrome.execute(requiredChromeCommand(command))
   )));
 }
 
@@ -409,6 +416,58 @@ function requiredMotionKeyCommand(value: unknown): MotionKeyCommand {
     default:
       throw new Error("The MotionKey command is invalid.");
   }
+}
+
+function requiredChromeCommand(value: unknown): ChromeCommand {
+  if (!value || typeof value !== "object") throw new Error("The Chrome command is invalid.");
+  const command = value as Record<string, unknown>;
+  switch (command.type) {
+    case "open": {
+      const url = optionalUrl(command.url);
+      return url ? { type: "open", url } : { type: "open" };
+    }
+    case "navigate": return { type: "navigate", url: requiredUrl(command.url) };
+    case "newTab": {
+      const url = optionalUrl(command.url);
+      return url ? { type: "newTab", url } : { type: "newTab" };
+    }
+    case "listTabs": return { type: "listTabs" };
+    case "activateTab": return { type: "activateTab", index: requiredTabIndex(command.index) };
+    case "closeTab": {
+      const index = optionalTabIndex(command.index);
+      return index ? { type: "closeTab", index } : { type: "closeTab" };
+    }
+    case "back": return { type: "back" };
+    case "forward": return { type: "forward" };
+    case "reload": return { type: "reload" };
+    default: throw new Error("The Chrome command is invalid.");
+  }
+}
+
+function requiredUrl(value: unknown) {
+  const url = optionalUrl(value);
+  if (!url) throw new Error("The Chrome URL is required.");
+  return url;
+}
+
+function optionalUrl(value: unknown) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim() || value.length > 8_192) throw new Error("The Chrome URL is invalid.");
+  return value.trim();
+}
+
+function requiredTabIndex(value: unknown) {
+  const index = optionalTabIndex(value);
+  if (!index) throw new Error("The Chrome tab index is required.");
+  return index;
+}
+
+function optionalTabIndex(value: unknown) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 1_000) {
+    throw new Error("The Chrome tab index is invalid.");
+  }
+  return value;
 }
 
 function motionKeyToken(value: unknown, field: string) {

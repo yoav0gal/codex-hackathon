@@ -20,10 +20,15 @@ The repository currently contains a working Realtime foundation:
 - a shared Codex app-server capability owned by Electron main
 - Realtime tools for finding and opening local Codex projects, plus starting,
   continuing, monitoring, interrupting, searching, opening, and checking Tasks
+- a Google Chrome tool for opening, navigating, and managing browser tabs
 - live completion and attention notifications from Codex back into Bob
 
 Starting, continuing, and monitoring a Codex Task leaves Codex Desktop in the
 background. Bob opens or foregrounds Codex only when the user explicitly asks.
+
+When Bob first controls Google Chrome, macOS may ask for permission to let Bob
+automate it. The tool supports opening Chrome, opening or navigating tabs,
+listing/activating/closing tabs, and back, forward, and reload actions.
 
 Codex task control is implemented against the managed local app-server daemon.
 Bob and Codex Desktop receive true live updates only when Desktop is launched
