@@ -1,0 +1,7 @@
+# macOS only. Python 3.11+
+mediapipe>=0.10.9
+opencv-python>=4.8
+numpy>=1.24
+pyobjc-framework-Quartz>=10.0
+# tests optional:
+# pytest>=8
