@@ -9,3 +9,4 @@ dist-electron/
 .idea/
 .vscode/
 .local/
+.superpowers/
