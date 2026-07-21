@@ -60,12 +60,9 @@ export class CodexCapability {
     const connection = await this.client.connect();
     const threadId = await this.client.startThread(workspace, effort);
     this.activeThreadId = threadId;
-    // Opening first makes Desktop resume and subscribe to the new thread before
-    // Bob starts the live turn on the shared daemon.
-    await this.options.openExternal(threadUrl(threadId));
     const turnId = await this.client.startTurn(threadId, task, effort);
     return {
-      message: "Started the Codex Task and opened the same live task in Codex Desktop. Bob will report completion or anything requiring attention.",
+      message: "Started the Codex Task in the background. Bob will report completion or anything requiring attention.",
       threadId,
       turnId,
       workspace,
@@ -79,7 +76,6 @@ export class CodexCapability {
     const connection = await this.client.connect();
     await this.client.resumeThread(thread.id);
     this.activeThreadId = thread.id;
-    await this.options.openExternal(threadUrl(thread.id));
     const current = this.client.getLatestUpdate(thread.id);
     if (current?.status === "needsAttention") {
       throw new Error("This Codex Task is waiting for attention in Codex Desktop. Resolve that request there before continuing it.");
@@ -89,8 +85,8 @@ export class CodexCapability {
       : await this.client.startTurn(thread.id, instruction, effort);
     return {
       message: current?.status === "inProgress"
-        ? "Steered the active Codex turn. Bob remains subscribed to its live updates."
-        : "Continued the Codex Task in a new turn. Bob remains subscribed to its live updates.",
+        ? "Steered the active Codex turn in the background. Bob remains subscribed to its live updates."
+        : "Continued the Codex Task in a new background turn. Bob remains subscribed to its live updates.",
       threadId: thread.id,
       turnId,
       workspace: thread.workspace,

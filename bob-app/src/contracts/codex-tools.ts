@@ -2,11 +2,11 @@ export const BOB_CODEX_TOOLS = [
   {
     type: "function",
     name: "start_codex_task",
-    description: "Start real development work in a new Codex Task, open that same task in Codex Desktop, and monitor it live. General tasks go to the Bob Delegations project by default.",
+    description: "Start and monitor a new Codex Task in the background without opening Codex Desktop. Use this as the fallback when no other available tool can perform the user's requested action or you do not know how to perform it. General tasks go to the Bob Delegations project by default.",
     parameters: {
       type: "object",
       properties: {
-        task: { type: "string", description: "The complete task Codex should perform." },
+        task: { type: "string", description: "A short, direct, outcome-focused instruction containing the user's requested action and necessary target details." },
         workspace: { type: "string", description: "Optional project name or absolute path. Omit for the Bob Delegations project." },
         effort: { type: "string", enum: ["low", "medium", "high", "xhigh"], description: "Optional reasoning effort. Defaults to high." },
       },
@@ -16,7 +16,7 @@ export const BOB_CODEX_TOOLS = [
   {
     type: "function",
     name: "continue_codex_task",
-    description: "Continue an existing Codex Task, or steer it when its current turn is still running.",
+    description: "Continue an existing Codex Task in the background, or steer it when its current turn is still running. This does not open Codex Desktop.",
     parameters: {
       type: "object",
       properties: {
@@ -53,7 +53,7 @@ export const BOB_CODEX_TOOLS = [
   {
     type: "function",
     name: "open_codex",
-    description: "Open or foreground Codex Desktop at the current view, the Bob Delegations project, a named code project, or an existing task.",
+    description: "Open or foreground Codex Desktop at the current view, the Bob Delegations project, a named code project, or an existing task. Use only when the user explicitly asks to open, show, or foreground Codex.",
     parameters: {
       type: "object",
       properties: {

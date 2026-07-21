@@ -47,7 +47,7 @@ function setup(update?: CodexTaskUpdate) {
 }
 
 describe("Codex capability", () => {
-  it("starts one shared task and opens the same Desktop thread", async () => {
+  it("starts one shared task in the background without opening Desktop", async () => {
     const { capability, client, openExternal } = setup();
 
     await expect(capability.execute({
@@ -62,8 +62,7 @@ describe("Codex capability", () => {
     });
     expect(client.startThread).toHaveBeenCalledWith("/private/tmp/Bob Delegations", "medium");
     expect(client.startTurn).toHaveBeenCalledWith("thread-123", "Fix the login test", "medium");
-    expect(openExternal).toHaveBeenCalledWith("codex://threads/thread-123");
-    expect(openExternal.mock.invocationCallOrder[0]).toBeLessThan(client.startTurn.mock.invocationCallOrder[0]);
+    expect(openExternal).not.toHaveBeenCalled();
   });
 
   it("opens the Bob Delegations project", async () => {
@@ -106,8 +105,8 @@ describe("Codex capability", () => {
     expect(client.listThreads).toHaveBeenCalledWith(100, "hackathon");
   });
 
-  it("steers an in-progress task instead of creating a competing turn", async () => {
-    const { capability, client } = setup({
+  it("steers an in-progress task in the background instead of creating a competing turn", async () => {
+    const { capability, client, openExternal } = setup({
       threadId: "thread-123",
       turnId: "turn-active",
       status: "inProgress",
@@ -123,6 +122,7 @@ describe("Codex capability", () => {
 
     expect(client.steerTurn).toHaveBeenCalledWith("thread-123", "turn-active", "Keep the change focused");
     expect(client.startTurn).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
   });
 
   it("never steers through an approval request", async () => {
