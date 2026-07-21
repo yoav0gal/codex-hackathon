@@ -1,4 +1,15 @@
 export type CodexEffort = "low" | "medium" | "high" | "xhigh";
+export type CodexOpenTarget = "app" | "delegations" | "project" | "thread";
+export type CodexSearchScope = "projects" | "threads" | "all";
+export type CodexUpdateEvent =
+  | "snapshot"
+  | "turnStarted"
+  | "agentMessage"
+  | "delta"
+  | "attention"
+  | "attentionResolved"
+  | "error"
+  | "turnCompleted";
 
 export type CodexCommand =
   | {
@@ -18,15 +29,22 @@ export type CodexCommand =
       thread: string;
     }
   | {
+      type: "live";
+      enabled: boolean;
+      thread?: string;
+    }
+  | {
       type: "interrupt";
       thread?: string;
     }
   | {
       type: "open";
-      thread?: string;
+      target: CodexOpenTarget;
+      reference?: string;
     }
   | {
       type: "search";
+      scope: CodexSearchScope;
       query: string;
     }
   | {
@@ -54,6 +72,10 @@ export interface CodexTaskUpdate {
   turnId: string;
   status: CodexTurnStatus;
   assistantText: string;
+  event?: CodexUpdateEvent;
+  eventId?: string;
+  updateText?: string;
+  live?: boolean;
   error?: string;
   attention?: {
     method: string;
@@ -68,6 +90,8 @@ export interface CodexCommandValue {
   workspace?: string;
   connectionMode?: "shared";
   serverVersion?: string;
+  codexLive?: boolean;
   task?: CodexTaskUpdate;
+  projects?: string[];
   threads?: CodexThreadSummary[];
 }

@@ -10,3 +10,7 @@ dist-electron/
 .vscode/
 .local/
 .superpowers/
+
+# Python bytecode
+__pycache__/
+*.pyc

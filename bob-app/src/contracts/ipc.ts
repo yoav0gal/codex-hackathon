@@ -1,6 +1,8 @@
 import type { ChatSession, NewMessageInput, SessionSummary } from "./sessions.js";
 import type { CodexCommand, CodexCommandValue, CodexTaskUpdate } from "./codex.js";
 import type { MotionKeyCommand, MotionKeyResult } from "./motionkey.js";
+import type { ChromeCommand, ChromeResult } from "./chrome.js";
+import type { ScreenshotCapture } from "./screenshots.js";
 
 export const IPC = {
   getRealtimeClientSecret: "realtime:get-client-secret",
@@ -19,6 +21,8 @@ export const IPC = {
   controlCodex: "codex:control",
   codexTaskUpdate: "codex:task-update",
   controlMotionKey: "motionkey:control",
+  controlChrome: "chrome:control",
+  captureScreenshot: "screen:capture",
 } as const;
 
 export type WindowMode = "companion" | "full";
@@ -44,6 +48,8 @@ export interface DesktopBridge {
   controlCodex(command: CodexCommand): Promise<CodexCommandValue>;
   onCodexTaskUpdate(listener: (update: CodexTaskUpdate) => void): () => void;
   controlMotionKey(command: MotionKeyCommand): Promise<MotionKeyResult>;
+  controlChrome(command: ChromeCommand): Promise<ChromeResult>;
+  captureScreenshot(): Promise<ScreenshotCapture>;
 }
 
 export type IpcResult<T> =

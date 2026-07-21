@@ -2,16 +2,20 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain, screen, session, shell } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session, shell, systemPreferences } from "electron";
 import { config } from "dotenv";
 import { CodexAppServerClient } from "../../codex/app-server-client.js";
 import { CodexCapability } from "../../codex/capability.js";
 import { DelegationWorkspace } from "../../codex/delegation-workspace.js";
+import { WorkspaceResolver } from "../../codex/workspace-resolver.js";
 import type { CodexCommand, CodexCommandValue } from "../../contracts/codex.js";
 import type { MotionKeyCommand, MotionKeyGestureMode, MotionKeyResult } from "../../contracts/motionkey.js";
+import type { ChromeCommand, ChromeResult } from "../../contracts/chrome.js";
+import type { ScreenshotCapture } from "../../contracts/screenshots.js";
 import { IPC, type IpcResult, type WindowMode } from "../../contracts/ipc.js";
 import type { ChatSession, NewMessageInput, SessionSummary } from "../../contracts/sessions.js";
 import { MotionKeyController, resolveMotionKeyPaths } from "./motionkey-controller.js";
+import { ChromeController } from "./chrome-controller.js";
 import { mintRealtimeClientSecret } from "./realtime-secret.js";
 import { SessionStore } from "./session-store.js";
 import { SherpaWakeEngine } from "./sherpa-wake-engine.js";
@@ -24,6 +28,7 @@ let mainWindow: BrowserWindow | undefined;
 let sessions: SessionStore;
 let codex: CodexCapability;
 let motionKey: MotionKeyController;
+let chrome: ChromeController;
 let windowMode: WindowMode = "companion";
 const wakeEngine = new SherpaWakeEngine(app.getAppPath());
 
@@ -31,6 +36,9 @@ const companionSize = 128;
 const companionMargin = 18;
 const preferredFullSize = { width: 1180, height: 780 };
 const minimumFullSize = { width: 860, height: 600 };
+const screenshotMaximumDimension = 1_600;
+const screenshotMaximumDataUrlLength = 180_000;
+const screenshotMinimumDimension = 640;
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -44,6 +52,7 @@ else {
     sessions = new SessionStore(path.join(app.getPath("userData"), "sessions.json"));
     codex = createCodexCapability();
     motionKey = createMotionKeyController();
+    chrome = new ChromeController();
     registerIpc();
     configureMediaPermissions();
     createWindow();
@@ -158,11 +167,79 @@ function registerIpc() {
   ipcMain.handle(IPC.controlMotionKey, async (_event, command: unknown): Promise<IpcResult<MotionKeyResult>> => protect(() => (
     motionKey.execute(requiredMotionKeyCommand(command))
   )));
+  ipcMain.handle(IPC.controlChrome, async (_event, command: unknown): Promise<IpcResult<ChromeResult>> => protect(() => (
+    chrome.execute(requiredChromeCommand(command))
+  )));
+  ipcMain.handle(IPC.captureScreenshot, async (): Promise<IpcResult<ScreenshotCapture>> => protect(captureCurrentScreen));
 }
 
 function createMotionKeyController() {
   const { projectDir, python } = resolveMotionKeyPaths(app.getAppPath(), localEnvironment);
   return new MotionKeyController(projectDir, python);
+}
+
+async function captureCurrentScreen(): Promise<ScreenshotCapture> {
+  if (process.platform === "darwin") {
+    const permission = systemPreferences.getMediaAccessStatus("screen");
+    if (permission === "denied" || permission === "restricted") {
+      throw new Error("Screen capture is blocked. Allow Bob under System Settings > Privacy & Security > Screen & System Audio Recording, then restart Bob.");
+    }
+  }
+
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const physicalWidth = Math.max(1, Math.round(display.size.width * display.scaleFactor));
+  const physicalHeight = Math.max(1, Math.round(display.size.height * display.scaleFactor));
+  const scale = Math.min(1, screenshotMaximumDimension / Math.max(physicalWidth, physicalHeight));
+  const thumbnailSize = {
+    width: Math.max(1, Math.round(physicalWidth * scale)),
+    height: Math.max(1, Math.round(physicalHeight * scale)),
+  };
+  const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize });
+  const source = sources.find((candidate) => candidate.display_id === String(display.id))
+    ?? (sources.length === 1 ? sources[0] : undefined);
+  if (!source || source.thumbnail.isEmpty()) {
+    throw new Error("Bob could not capture the current display. Check Screen & System Audio Recording permission and try again.");
+  }
+
+  const image = compressScreenshot(source.thumbnail);
+  const size = image.thumbnail.getSize();
+  return {
+    dataUrl: `data:image/jpeg;base64,${image.jpeg.toString("base64")}`,
+    displayId: String(display.id),
+    width: size.width,
+    height: size.height,
+  };
+}
+
+function compressScreenshot(source: Electron.NativeImage) {
+  const prefixLength = "data:image/jpeg;base64,".length;
+  const maximumJpegBytes = Math.floor((screenshotMaximumDataUrlLength - prefixLength) * 3 / 4);
+  let thumbnail = source;
+  let quality = 72;
+  let jpeg = thumbnail.toJPEG(quality);
+
+  while (jpeg.length > maximumJpegBytes) {
+    if (quality > 52) {
+      quality -= 10;
+    } else {
+      const size = thumbnail.getSize();
+      const currentMaximum = Math.max(size.width, size.height);
+      if (currentMaximum <= screenshotMinimumDimension) break;
+      const scale = Math.max(screenshotMinimumDimension / currentMaximum, 0.82);
+      thumbnail = thumbnail.resize({
+        width: Math.max(1, Math.round(size.width * scale)),
+        height: Math.max(1, Math.round(size.height * scale)),
+        quality: "better",
+      });
+      quality = 62;
+    }
+    jpeg = thumbnail.toJPEG(quality);
+  }
+
+  if (jpeg.length > maximumJpegBytes) {
+    throw new Error("Bob captured the screen, but could not make the image small enough for the live connection.");
+  }
+  return { jpeg, thumbnail };
 }
 
 function createCodexCapability() {
@@ -173,7 +250,7 @@ function createCodexCapability() {
     }),
     {
       delegations: new DelegationWorkspace(delegationsRoot()),
-      workspaceRoots: projectRoots(),
+      workspaces: new WorkspaceResolver(projectRoots()),
       openExternal: (url) => shell.openExternal(url),
     },
   );
@@ -185,6 +262,11 @@ function createCodexCapability() {
   // A failed connection remains retryable through the first explicit tool call.
   void capability.connect().catch((error) => console.warn("Bob could not preconnect to Codex:", errorMessage(error)));
   return capability;
+}
+
+function createMotionKeyController() {
+  const { projectDir, python } = resolveMotionKeyPaths(app.getAppPath(), localEnvironment);
+  return new MotionKeyController(projectDir, python);
 }
 
 function findCodexBinary() {
@@ -326,18 +408,49 @@ function requiredCodexCommand(value: unknown): CodexCommand {
   if (command.type === "monitor") {
     return { type: "monitor", thread: requiredShortText(command.thread, "thread", 1_000) };
   }
-  if (command.type === "interrupt" || command.type === "open" || command.type === "status") {
+  if (command.type === "live") {
+    const thread = optionalShortText(command.thread, "thread", 1_000);
+    if (typeof command.enabled !== "boolean") throw new Error("The Codex Live setting is invalid.");
+    return { type: "live", enabled: command.enabled, ...(thread ? { thread } : {}) };
+  }
+  if (command.type === "interrupt" || command.type === "status") {
     const thread = optionalShortText(command.thread, "thread", 1_000);
     return { type: command.type, ...(thread ? { thread } : {}) };
   }
+  if (command.type === "open") {
+    const reference = optionalShortText(command.reference, "reference", 4_096);
+    return {
+      type: "open",
+      target: requiredOpenTarget(command.target),
+      ...(reference ? { reference } : {}),
+    };
+  }
   if (command.type === "search") {
-    return { type: "search", query: optionalShortText(command.query, "query", 1_000) ?? "" };
+    return {
+      type: "search",
+      scope: requiredSearchScope(command.scope),
+      query: optionalShortText(command.query, "query", 1_000) ?? "",
+    };
   }
   throw new Error("The Codex command is invalid.");
 }
 
+function requiredOpenTarget(value: unknown) {
+  if (value !== "app" && value !== "delegations" && value !== "project" && value !== "thread") {
+    throw new Error("The Codex open target is invalid.");
+  }
+  return value;
+}
+
+function requiredSearchScope(value: unknown) {
+  if (value !== "projects" && value !== "threads" && value !== "all") {
+    throw new Error("The Codex search scope is invalid.");
+  }
+  return value;
+}
+
 function requiredEffort(value: unknown) {
-  if (value === undefined) return "high";
+  if (value === undefined) return "low";
   if (value !== "low" && value !== "medium" && value !== "high" && value !== "xhigh") {
     throw new Error("The Codex reasoning effort is invalid.");
   }
@@ -382,6 +495,58 @@ function requiredMotionKeyCommand(value: unknown): MotionKeyCommand {
     default:
       throw new Error("The MotionKey command is invalid.");
   }
+}
+
+function requiredChromeCommand(value: unknown): ChromeCommand {
+  if (!value || typeof value !== "object") throw new Error("The Chrome command is invalid.");
+  const command = value as Record<string, unknown>;
+  switch (command.type) {
+    case "open": {
+      const url = optionalUrl(command.url);
+      return url ? { type: "open", url } : { type: "open" };
+    }
+    case "navigate": return { type: "navigate", url: requiredUrl(command.url) };
+    case "newTab": {
+      const url = optionalUrl(command.url);
+      return url ? { type: "newTab", url } : { type: "newTab" };
+    }
+    case "listTabs": return { type: "listTabs" };
+    case "activateTab": return { type: "activateTab", index: requiredTabIndex(command.index) };
+    case "closeTab": {
+      const index = optionalTabIndex(command.index);
+      return index ? { type: "closeTab", index } : { type: "closeTab" };
+    }
+    case "back": return { type: "back" };
+    case "forward": return { type: "forward" };
+    case "reload": return { type: "reload" };
+    default: throw new Error("The Chrome command is invalid.");
+  }
+}
+
+function requiredUrl(value: unknown) {
+  const url = optionalUrl(value);
+  if (!url) throw new Error("The Chrome URL is required.");
+  return url;
+}
+
+function optionalUrl(value: unknown) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim() || value.length > 8_192) throw new Error("The Chrome URL is invalid.");
+  return value.trim();
+}
+
+function requiredTabIndex(value: unknown) {
+  const index = optionalTabIndex(value);
+  if (!index) throw new Error("The Chrome tab index is required.");
+  return index;
+}
+
+function optionalTabIndex(value: unknown) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 1_000) {
+    throw new Error("The Chrome tab index is invalid.");
+  }
+  return value;
 }
 
 function motionKeyToken(value: unknown, field: string) {

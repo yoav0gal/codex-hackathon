@@ -45,7 +45,7 @@ A developer can:
 2. Start a Realtime Session by voice or from Chat view.
 3. Speak and type in a unified conversation.
 4. Ask the agent to start, open, continue, steer, or monitor a Codex task for a selected codebase.
-5. See concise task progress and the final outcome in Chat view.
+5. Turn on Codex Live for one Task and hear its completed progress messages and important state changes while the Session remains connected.
 6. Move between Companion and Chat without interrupting the Session.
 7. End the Session and later inspect its locally saved Session Record.
 
@@ -78,6 +78,7 @@ The scaffold does not yet provide:
 - Production-grade storage or account management
 - Reusing or migrating the Gerb implementation wholesale
 - Treating voice as an answer to Codex user-input or attention requests
+- Reading raw token deltas or narrating every loaded Codex Task
 
 ## Success criteria
 

@@ -18,9 +18,22 @@ The repository currently contains a working Realtime foundation:
 - short-lived Realtime client secrets minted in the Electron main process
 - local “Hey, Bob” wake-word detection while sleeping
 - a shared Codex app-server capability owned by Electron main
-- Realtime tools for starting, continuing, monitoring, interrupting, opening,
-  searching, and checking Codex Tasks
+- Realtime tools for finding and opening local Codex projects, plus starting,
+  continuing, monitoring, interrupting, searching, opening, and checking Tasks
+- a Google Chrome tool for opening, navigating, and managing browser tabs
 - live completion and attention notifications from Codex back into Bob
+- Codex Live, which marks one Task and reads its completed progress messages
+  and important state changes aloud while the Realtime Session is connected
+
+Starting, continuing, and monitoring a Codex Task leaves Codex Desktop in the
+background. Bob opens or foregrounds Codex only when the user explicitly asks.
+Ask Bob to “turn on Codex Live for &lt;task&gt;” to select one Task, switch it by
+naming another Task, or ask him to turn Codex Live off. Streaming token deltas
+are coalesced at completed message boundaries so each update is spoken once.
+
+When Bob first controls Google Chrome, macOS may ask for permission to let Bob
+automate it. The tool supports opening Chrome, opening or navigating tabs,
+listing/activating/closing tabs, and back, forward, and reload actions.
 
 Codex task control is implemented against the managed local app-server daemon.
 Bob and Codex Desktop receive true live updates only when Desktop is launched
@@ -84,7 +97,7 @@ needed, and Codex Desktop remains the interaction surface. Run
 the command fails when Desktop is still using its private stdio servers.
 
 Optional `.env.local` settings are documented in `.env.example`. By default,
-Bob uses `gpt-5.6-terra` with `high` reasoning by default, creates general Codex Tasks in the dedicated
+Bob uses `gpt-5.6-terra` with `low` reasoning by default, creates general Codex Tasks in the dedicated
 `~/Documents/Bob Delegations` project, and uses `~/code` for explicit
 project-name resolution. Set `BOB_DELEGATIONS_ROOT` to customize that project
 folder. Bob-created and resumed Tasks run in YOLO mode by default: approval

@@ -2,6 +2,7 @@ import type { AgentEvent, AgentSession, AgentSnapshot, ConnectionMode } from "..
 import type { DesktopBridge, WindowMode } from "../../contracts/ipc";
 import type { ChatMessage, ChatSession, MessageRole, MessageSource, SessionSummary } from "../../contracts/sessions";
 import type { WakeDetector } from "./local-wake-detector";
+import { codexNarrationKey } from "./codex-narration";
 
 interface LiveMessage {
   id: string;
@@ -36,8 +37,8 @@ export class RealtimeDesktopApp {
     this.bindUi();
     this.agent.subscribe((event) => this.onAgentEvent(event));
     this.bridge.onCodexTaskUpdate((update) => {
-      if (update.status === "inProgress") return;
-      const key = `${update.turnId}:${update.status}:${update.attention?.requestId ?? ""}`;
+      const key = codexNarrationKey(update);
+      if (!key) return;
       if (this.narratedCodexUpdates.has(key)) return;
       this.narratedCodexUpdates.add(key);
       this.agent.notifyCodexUpdate(update);
@@ -202,11 +203,16 @@ export class RealtimeDesktopApp {
 
   private async toggleVoice() {
     const snapshot = this.agent.snapshot();
-    if (snapshot.mode === "voice" && snapshot.status !== "disconnected" && snapshot.status !== "error") {
+    const action = voiceToggleAction(snapshot, this.isAwake);
+    if (action === "sleep") {
       await this.sleep();
       return;
     }
-    await this.wake("voice-button");
+    if (action === "connect") {
+      await this.connect("voice");
+      return;
+    }
+    if (action === "wake") await this.wake("voice-button");
   }
 
   private async connect(mode: ConnectionMode) {
@@ -381,6 +387,15 @@ export class RealtimeDesktopApp {
     this.elements.input.style.height = "auto";
     this.elements.input.style.height = `${Math.min(this.elements.input.scrollHeight, 140)}px`;
   }
+}
+
+export type VoiceToggleAction = "sleep" | "wake" | "connect";
+
+export function voiceToggleAction(snapshot: AgentSnapshot, isAwake: boolean): VoiceToggleAction {
+  if (snapshot.mode === "voice" && snapshot.status !== "disconnected" && snapshot.status !== "error") {
+    return "sleep";
+  }
+  return isAwake ? "connect" : "wake";
 }
 
 function mountShell(root: HTMLElement) {
