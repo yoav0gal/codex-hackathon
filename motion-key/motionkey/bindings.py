@@ -21,6 +21,7 @@ DEFAULT_BINDINGS: dict[str, tuple[str, str]] = {
     "raise-right-hand": ("s", "hold"),
     "both-hands-raised": ("up", "hold"),
     "clap": ("enter", "tap"),
+    "finger-snap": ("space", "tap"),
     "head-lean-left": ("left", "hold"),
     "head-lean-right": ("right", "hold"),
 }

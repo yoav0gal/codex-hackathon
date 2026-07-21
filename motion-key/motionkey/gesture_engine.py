@@ -97,6 +97,10 @@ class GestureEngine:
 RAISE_Y = 0.4
 # Two open hands whose wrists are within this normalized distance count as a clap.
 CLAP_DIST = 0.15
+# A snap is detected when the thumb and middle-finger tips touch.  The
+# threshold is relative to palm width so the same gesture works whether the
+# hand is near or far from the camera.
+SNAP_TIP_PALM_RATIO = 0.45
 # Head must tilt at least this many degrees (eye line off horizontal) to lean.
 # ponytail: fixed threshold; expose as a flag if it needs per-user tuning.
 HEAD_LEAN_DEG = 12.0
@@ -104,7 +108,7 @@ HEAD_LEAN_DEG = 12.0
 
 def derive_active(hands, head=None, raise_y: float = RAISE_Y) -> dict[str, bool]:
     """Map detected hands (and optional head pose) -> raw gesture activity."""
-    left_fist = right_fist = left_raise = right_raise = False
+    left_fist = right_fist = left_raise = right_raise = finger_snap = False
     left_wrist = right_wrist = None
     for h in hands:
         wrist = h.landmarks[0] if h.landmarks else (0.5, 1.0)
@@ -117,6 +121,19 @@ def derive_active(hands, head=None, raise_y: float = RAISE_Y) -> dict[str, bool]
             right_fist |= h.is_fist
             right_raise |= raised
             right_wrist = wrist
+        # A conventional finger snap closes the thumb against the middle
+        # finger. Exclude fists so a closed hand cannot fire a snap binding.
+        if not h.is_fist and len(h.landmarks) > 17:
+            thumb_tip = h.landmarks[4]
+            middle_tip = h.landmarks[12]
+            palm_width = math.hypot(h.landmarks[5][0] - h.landmarks[17][0],
+                                    h.landmarks[5][1] - h.landmarks[17][1])
+            finger_snap |= (
+                palm_width > 0
+                and math.hypot(thumb_tip[0] - middle_tip[0],
+                               thumb_tip[1] - middle_tip[1])
+                <= palm_width * SNAP_TIP_PALM_RATIO
+            )
     both = left_fist and right_fist
     both_raise = left_raise and right_raise
     clap = (
@@ -137,6 +154,7 @@ def derive_active(hands, head=None, raise_y: float = RAISE_Y) -> dict[str, bool]
         "raise-right-hand": right_raise and not both_raise,
         "both-hands-raised": both_raise,
         "clap": clap,
+        "finger-snap": finger_snap,
         "head-lean-left": head is not None and roll <= -HEAD_LEAN_DEG,
         "head-lean-right": head is not None and roll >= HEAD_LEAN_DEG,
     }

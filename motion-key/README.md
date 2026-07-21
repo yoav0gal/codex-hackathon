@@ -58,12 +58,17 @@ python -m motionkey run --preview --dry-run   # logs keys, sends nothing
 
 ### Gesture bank (built-in — no recording)
 
-`left-fist`, `right-fist`, `both-fists`, `raise-left-hand`, `raise-right-hand`.
+`left-fist`, `right-fist`, `both-fists`, `raise-left-hand`, `raise-right-hand`,
+`both-hands-raised`, `clap`, `finger-snap`, `head-lean-left`, and
+`head-lean-right`.
 `bind` only maps a known gesture to a supported key; MotionKey does not record
 or learn gestures.
 
 A hand is "raised" when it is **open** and held in the upper part of the frame
 (so a raised open hand is distinct from a closed fist).
+
+A **finger snap** is recognized when the thumb and middle-finger tips meet on
+an open hand. It uses tap mode by default and is bound to `space`.
 
 ### Modes
 

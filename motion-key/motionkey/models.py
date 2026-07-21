@@ -11,6 +11,7 @@ GESTURES = (
     "raise-right-hand",
     "both-hands-raised",
     "clap",
+    "finger-snap",
     "head-lean-left",
     "head-lean-right",
 )

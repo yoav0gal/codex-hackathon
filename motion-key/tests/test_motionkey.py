@@ -157,6 +157,24 @@ def test_derive_clap():
     assert not fist["clap"]
 
 
+def test_derive_finger_snap():
+    hand = _hand("left", False, 0.9)
+    # Put the thumb and middle-finger tips together; palm width is 0.2.
+    hand.landmarks[5] = (0.4, 0.7)
+    hand.landmarks[17] = (0.6, 0.7)
+    hand.landmarks[4] = (0.5, 0.5)
+    hand.landmarks[12] = (0.52, 0.5)
+    assert derive_active([hand])["finger-snap"]
+
+    hand.landmarks[12] = (0.8, 0.5)
+    assert not derive_active([hand])["finger-snap"]
+
+    # A fist is never considered a snap, even when its tips are close.
+    hand.is_fist = True
+    hand.landmarks[12] = (0.52, 0.5)
+    assert not derive_active([hand])["finger-snap"]
+
+
 def test_derive_head_lean():
     left = derive_active([], head=HeadObs(roll_deg=-20.0))
     assert left["head-lean-left"] and not left["head-lean-right"]
