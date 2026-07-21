@@ -90,7 +90,8 @@ The application module coordinates the active Session, selected view, saved Sess
 ### Codex capability module
 
 `CodexCapability` exposes one intent-level command interface: start, continue,
-monitor, interrupt, open, search, and status. `CodexAppServerClient` hides the
+monitor, interrupt, open, search, and status. Its open/search operations cover
+both configured local projects and persisted Codex Tasks. `CodexAppServerClient` hides the
 managed-daemon lifecycle, proxy WebSocket framing, JSON-RPC, task discovery,
 subscriptions, reconnection, and event aggregation. The renderer never owns a
 Codex process, protocol parser, credential, or approval response.

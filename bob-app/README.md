@@ -18,9 +18,12 @@ The repository currently contains a working Realtime foundation:
 - short-lived Realtime client secrets minted in the Electron main process
 - local “Hey, Bob” wake-word detection while sleeping
 - a shared Codex app-server capability owned by Electron main
-- Realtime tools for starting, continuing, monitoring, interrupting, opening,
-  searching, and checking Codex Tasks
+- Realtime tools for finding and opening local Codex projects, plus starting,
+  continuing, monitoring, interrupting, searching, opening, and checking Tasks
 - live completion and attention notifications from Codex back into Bob
+
+Starting, continuing, and monitoring a Codex Task leaves Codex Desktop in the
+background. Bob opens or foregrounds Codex only when the user explicitly asks.
 
 Codex task control is implemented against the managed local app-server daemon.
 Bob and Codex Desktop receive true live updates only when Desktop is launched
@@ -84,7 +87,7 @@ needed, and Codex Desktop remains the interaction surface. Run
 the command fails when Desktop is still using its private stdio servers.
 
 Optional `.env.local` settings are documented in `.env.example`. By default,
-Bob uses `gpt-5.6-terra` with `high` reasoning by default, creates general Codex Tasks in the dedicated
+Bob uses `gpt-5.6-terra` with `low` reasoning by default, creates general Codex Tasks in the dedicated
 `~/Documents/Bob Delegations` project, and uses `~/code` for explicit
 project-name resolution. Set `BOB_DELEGATIONS_ROOT` to customize that project
 folder. Bob-created and resumed Tasks run in YOLO mode by default: approval
