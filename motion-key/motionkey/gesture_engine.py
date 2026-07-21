@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from .bindings import BindingStore
+from .hand_detector import classify_static_gestures, finger_joystick_direction
 
 log = logging.getLogger("motionkey.engine")
 
@@ -99,6 +100,16 @@ RAISE_Y = 0.4
 def derive_active(hands, raise_y: float = RAISE_Y) -> dict[str, bool]:
     """Map detected hands -> raw gesture activity for one frame."""
     left_fist = right_fist = left_raise = right_raise = False
+    static = {
+        "open-palm": False,
+        "pointing-up": False,
+        "thumb-down": False,
+        "thumb-up": False,
+        "victory": False,
+        "i-love-you": False,
+    }
+    right_hand = None
+
     for h in hands:
         wrist_y = h.landmarks[0][1] if h.landmarks else 1.0
         raised = (not h.is_fist) and wrist_y < raise_y
@@ -106,15 +117,28 @@ def derive_active(hands, raise_y: float = RAISE_Y) -> dict[str, bool]:
             left_fist |= h.is_fist
             left_raise |= raised
         else:
+            right_hand = h
             right_fist |= h.is_fist
             right_raise |= raised
+        if not h.is_fist and h.landmarks:
+            for gesture in classify_static_gestures(h.landmarks):
+                static[gesture] = True
+
     both = left_fist and right_fist
-    return {
+    joystick = None
+    if left_fist and right_hand and right_hand.landmarks:
+        joystick = finger_joystick_direction(right_hand.landmarks)
+
+    active = {
         # both-fists is exclusive: when both hands are closed only it fires,
         # not the individual left/right fists (avoids 3 keys at once).
-        "left-fist": left_fist and not both,
+        "left-fist": left_fist and not both and joystick is None,
         "right-fist": right_fist and not both,
         "both-fists": both,
         "raise-left-hand": left_raise,
         "raise-right-hand": right_raise,
     }
+    active.update(static)
+    for direction in ("up", "down", "left", "right"):
+        active[f"left-fist-right-finger-{direction}"] = joystick == direction
+    return active
